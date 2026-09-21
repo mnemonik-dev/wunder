@@ -4,17 +4,23 @@ The model is fitted by `neutrino-wunder` (Rust, see the neutrino repository)
 and exported to `model.json`; this file only replays it, row by row, using
 NumPy on one CPU thread. It has no dependency other than NumPy.
 
-Per row `x` (112 features as float64):
+Per row `x` (112 features as float64), `a = 2 / (span + 1)`:
 
-    step 0 : ema_fast = ema_slow = prev = x
-    step >0: ema_fast += a_fast * (x - ema_fast)
-             ema_slow += a_slow * (x - ema_slow)
-    pred    = x @ A - ema_fast @ B - ema_slow @ C - prev @ D + bias
-    prev    = x
+    step 0 : ema_fast = ema_mid = ema_slow = x ; vol = 0 ; hist[*] = x
+    step >0: ema_* += a_* * (x - ema_*)
+    d_fast  = x - ema_fast
+    vol    += a_vol * (|d_fast| - vol)
+    scale   = max(vol, floor)  if vol_norm else 1
+    lagged  = hist[step mod lag]
+    linear  = x @ W_raw + (d_fast/scale) @ W_fast + ((x-ema_mid)/scale) @ W_mid
+            + ((x-ema_slow)/scale) @ W_slow + ((x-lagged)/scale) @ W_diff
+            + imbalance(x) @ W_imb + bias
+    hist[step mod lag] = x
 
-where A, B, C, D are (112, 2) matrices folded from the exported weights
-(zero rows for feature columns the champion does not use), so the whole
-per-row cost is four small mat-vecs and a handful of vector updates.
+Every W_* is a (112, 2) matrix folded from the exported weights (zero rows
+for columns a block does not use), so no fancy indexing happens per row;
+blocks the champion did not select are skipped entirely. This mirrors
+`neutrino_wunder::features::StreamState::push` operation for operation.
 Optionally (``blend.json`` present next to this file) the linear prediction
 is blended per target with the organisers' stateful GRU baseline
 (``baseline.onnx``, part of the public starter pack, trained only on the
@@ -89,43 +95,40 @@ class GruBaseline:
         return self.pred[0, 0]
 
 
-def _fold(model: dict) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """Turn the exported block weights into four (112, 2) matrices."""
+def _fold(model: dict) -> dict:
+    """Turn the exported block weights into (112, 2) matrices per block."""
     layout = model["layout"]
     spec = layout["spec"]
     raw_idx = np.asarray(layout["raw_idx"], dtype=np.intp)
     dyn_idx = np.asarray(layout["dyn_idx"], dtype=np.intp)
+    imb_pairs = [tuple(p) for p in layout.get("imb_pairs", [])]
     weights = np.asarray(model["weights"], dtype=np.float64)  # (2, F)
     if weights.shape[0] != 2:
         raise ValueError("model.json: expected two weight vectors")
-    n_raw, n_dyn = len(raw_idx), len(dyn_idx)
-    expected = n_raw + n_dyn * (1 + int(spec["use_dslow"]) + int(spec["use_diff1"]))
+    blocks = [("raw", len(raw_idx)), ("fast", len(dyn_idx))]
+    if spec.get("use_dmid"):
+        blocks.append(("mid", len(dyn_idx)))
+    if spec["use_dslow"]:
+        blocks.append(("slow", len(dyn_idx)))
+    if spec.get("use_diff", spec.get("use_diff1")):
+        blocks.append(("diff", len(dyn_idx)))
+    if spec.get("use_imbalance"):
+        blocks.append(("imb", len(imb_pairs)))
+    expected = sum(n for _, n in blocks)
     if weights.shape[1] != expected:
         raise ValueError(f"model.json: {weights.shape[1]} weights, layout implies {expected}")
-
-    a = np.zeros((N_FEATURES, 2))
-    b = np.zeros((N_FEATURES, 2))
-    c = np.zeros((N_FEATURES, 2))
-    d = np.zeros((N_FEATURES, 2))
+    out = {}
     k = 0
-    a[raw_idx] += weights[:, k:k + n_raw].T
-    k += n_raw
-    w_fast = weights[:, k:k + n_dyn].T
-    k += n_dyn
-    a[dyn_idx] += w_fast
-    b[dyn_idx] += w_fast
-    if spec["use_dslow"]:
-        w_slow = weights[:, k:k + n_dyn].T
-        k += n_dyn
-        a[dyn_idx] += w_slow
-        c[dyn_idx] += w_slow
-    if spec["use_diff1"]:
-        w_d1 = weights[:, k:k + n_dyn].T
-        k += n_dyn
-        a[dyn_idx] += w_d1
-        d[dyn_idx] += w_d1
-    bias = np.asarray(model["bias"], dtype=np.float64)
-    return a, b, c, d, bias
+    for name, n in blocks:
+        w = weights[:, k:k + n].T  # (n, 2)
+        k += n
+        if name == "imb":
+            out[name] = w.copy()
+        else:
+            full = np.zeros((N_FEATURES, 2))
+            full[raw_idx if name == "raw" else dyn_idx] = w
+            out[name] = full
+    return out
 
 
 class PredictionModel:
@@ -144,56 +147,102 @@ class PredictionModel:
         if model.get("format") != "neutrino-wunder-linear-v1":
             raise ValueError(f"unsupported model format {model.get('format')!r}")
         layout = model["layout"]
+        spec = layout["spec"]
         self.alpha_fast = float(layout["alpha_fast"])
+        self.alpha_mid = float(layout.get("alpha_mid", 0.0))
         self.alpha_slow = float(layout["alpha_slow"])
-        self.w_x, self.w_fast, self.w_slow, self.w_prev, self.bias = _fold(model)
-        self.use_slow = bool(np.any(self.w_slow))
-        self.use_prev = bool(np.any(self.w_prev))
+        self.alpha_vol = float(layout.get("alpha_vol", 0.0))
+        self.floor = np.asarray(layout.get("floor", [0.0] * N_FEATURES), dtype=np.float64)
+        self.vol_norm = bool(spec.get("vol_norm", False))
+        self.lag = int(spec.get("diff_lag", 1)) if spec.get("use_diff", spec.get("use_diff1")) else 1
+        self.w = _fold(model)
+        self.use_mid = "mid" in self.w
+        self.use_slow = "slow" in self.w
+        self.use_diff = "diff" in self.w
+        self.use_imb = "imb" in self.w
+        if self.use_imb:
+            pairs = np.asarray(layout["imb_pairs"], dtype=np.intp)
+            self.imb_bid, self.imb_ask = pairs[:, 0], pairs[:, 1]
+            self.imb_floor = self.floor[self.imb_bid]
+        self.bias = np.asarray(model["bias"], dtype=np.float64)
 
         self.seq_ix = None
         self.step = 0
         self.ema_fast = np.zeros(N_FEATURES)
+        self.ema_mid = np.zeros(N_FEATURES)
         self.ema_slow = np.zeros(N_FEATURES)
-        self.prev = np.zeros(N_FEATURES)
+        self.vol = np.zeros(N_FEATURES)
+        self.hist = np.zeros((self.lag, N_FEATURES))
         self._tmp = np.zeros(N_FEATURES)
+        self._d = np.zeros(N_FEATURES)
 
     def _reset(self, x: np.ndarray) -> None:
         self.ema_fast[:] = x
+        self.ema_mid[:] = x
         self.ema_slow[:] = x
-        self.prev[:] = x
+        self.vol[:] = 0.0
+        self.hist[:] = x
 
     def predict(self, data_point):
         x = np.asarray(data_point.state, dtype=np.float64)
         if data_point.seq_ix != self.seq_ix:
             self.seq_ix = data_point.seq_ix
             self.step = 0
+        tmp = self._tmp
         if self.step == 0:
             self._reset(x)
             if self.gru is not None:
                 self.gru.reset()
         else:
-            tmp = self._tmp
             np.subtract(x, self.ema_fast, out=tmp)
             tmp *= self.alpha_fast
             self.ema_fast += tmp
+            np.subtract(x, self.ema_mid, out=tmp)
+            tmp *= self.alpha_mid
+            self.ema_mid += tmp
             np.subtract(x, self.ema_slow, out=tmp)
             tmp *= self.alpha_slow
             self.ema_slow += tmp
+        d = self._d
+        np.subtract(x, self.ema_fast, out=d)
+        np.abs(d, out=tmp)
+        tmp -= self.vol
+        tmp *= self.alpha_vol
+        self.vol += tmp
+        slot = self.step % self.lag
         self.step += 1
         gru_pred = self.gru.step(data_point.state) if self.gru is not None else None
 
         if not data_point.need_prediction:
-            self.prev[:] = x
+            self.hist[slot] = x
             return None
 
-        pred = x @ self.w_x
-        pred -= self.ema_fast @ self.w_fast
+        scale = np.maximum(self.vol, self.floor) if self.vol_norm else None
+        pred = x @ self.w["raw"]
+        if scale is not None:
+            d /= scale
+        pred += d @ self.w["fast"]
+        if self.use_mid:
+            np.subtract(x, self.ema_mid, out=tmp)
+            if scale is not None:
+                tmp /= scale
+            pred += tmp @ self.w["mid"]
         if self.use_slow:
-            pred -= self.ema_slow @ self.w_slow
-        if self.use_prev:
-            pred -= self.prev @ self.w_prev
+            np.subtract(x, self.ema_slow, out=tmp)
+            if scale is not None:
+                tmp /= scale
+            pred += tmp @ self.w["slow"]
+        if self.use_diff:
+            np.subtract(x, self.hist[slot], out=tmp)
+            if scale is not None:
+                tmp /= scale
+            pred += tmp @ self.w["diff"]
+        if self.use_imb:
+            vb = x[self.imb_bid]
+            va = x[self.imb_ask]
+            pred += ((vb - va) / (np.abs(vb) + np.abs(va) + self.imb_floor)) @ self.w["imb"]
         pred += self.bias
-        self.prev[:] = x
+        self.hist[slot] = x
         if gru_pred is not None:
             pred = self.w_lin * pred + self.w_gru * gru_pred
         out = pred.astype(np.float32)
