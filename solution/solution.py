@@ -138,10 +138,13 @@ class MlpReadout:
         d = np.load(path)
         self.mu = d["mu"].astype(np.float64)
         self.inv_sigma = 1.0 / d["sigma"].astype(np.float64)
+        self.keep = d["keep"].astype(np.intp) if "keep" in d else None
         n = int(d["n_layers"])
         self.layers = [(d[f"W{i}"].astype(np.float64), d[f"b{i}"].astype(np.float64)) for i in range(n)]
 
     def __call__(self, phi: np.ndarray) -> np.ndarray:
+        if self.keep is not None:
+            phi = phi[self.keep]
         h = (phi - self.mu) * self.inv_sigma
         last = len(self.layers) - 1
         for i, (w, b) in enumerate(self.layers):

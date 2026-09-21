@@ -78,6 +78,9 @@ def main():
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--threads", type=int, default=4)
     ap.add_argument("--max-rows", type=int, default=0, help="use only the first N training rows (0 = all)")
+    ap.add_argument("--drop-regex", default="", help="drop feature columns whose name matches this regex (e.g. raw price levels)")
+    ap.add_argument("--evals-per-epoch", type=int, default=1)
+    ap.add_argument("--input-noise", type=float, default=0.0, help="gaussian noise (in std units) added to inputs during training")
     a = ap.parse_args()
 
     torch.manual_seed(a.seed)
@@ -90,15 +93,22 @@ def main():
     assert vside["features"] == f
     mu = np.asarray(side["mu"], dtype=np.float32)
     sigma = np.asarray(side["sigma"], dtype=np.float32)
+    keep = np.arange(f)
+    if a.drop_regex:
+        import re
+        rx = re.compile(a.drop_regex)
+        keep = np.array([i for i, n in enumerate(side["feature_names"]) if not rx.search(n)])
+        print(f"dropping {f - len(keep)} of {f} feature columns matching /{a.drop_regex}/", flush=True)
     n = tr.shape[0] if a.max_rows <= 0 else min(tr.shape[0], a.max_rows)
     t0 = time.perf_counter()
     print(f"loading {n:,} training rows x {f} features ...", flush=True)
     x = np.array(tr[:n, :f], dtype=np.float32)  # copy: memmap is read-only
     x -= mu
     x /= sigma
+    x = np.ascontiguousarray(x[:, keep])
     y = np.clip(np.array(tr[:n, f:f + 2], dtype=np.float32), -2.0, 2.0)
     w = np.abs(y) ** a.weight_power if a.weight_power > 0 else np.ones_like(y)
-    xv = (np.array(va[:, :f], dtype=np.float32) - mu) / sigma
+    xv = np.ascontiguousarray(((np.array(va[:, :f], dtype=np.float32) - mu) / sigma)[:, keep])
     yv = np.array(va[:, f:f + 2], dtype=np.float32)
     print(f"loaded in {time.perf_counter() - t0:.0f}s; validation rows {len(xv):,} (scored only)", flush=True)
 
@@ -107,7 +117,7 @@ def main():
     W = torch.from_numpy(w.astype(np.float32))
     XV = torch.from_numpy(xv)
     hidden = [int(h) for h in a.hidden.split(",") if h]
-    model = MLP(f, hidden, a.dropout)
+    model = MLP(len(keep), hidden, a.dropout)
     opt = torch.optim.Adam(model.parameters(), lr=a.lr, weight_decay=a.weight_decay)
     steps_per_epoch = (n + a.batch - 1) // a.batch
     sched = torch.optim.lr_scheduler.OneCycleLR(opt, max_lr=a.lr, total_steps=a.epochs * steps_per_epoch, pct_start=0.15)
@@ -121,9 +131,13 @@ def main():
         perm = torch.randperm(n, generator=g)
         t0 = time.perf_counter()
         loss_sum = 0.0
-        for i in range(0, n, a.batch):
+        eval_every = max(1, steps_per_epoch // max(1, a.evals_per_epoch))
+        for step_i, i in enumerate(range(0, n, a.batch)):
             idx = perm[i:i + a.batch]
-            pred = model(X[idx])
+            xb = X[idx]
+            if a.input_noise > 0:
+                xb = xb + a.input_noise * torch.randn(xb.shape, generator=g)
+            pred = model(xb)
             loss = ((pred - Y[idx]) ** 2 * W[idx]).sum(dim=0) / wsum * (n / len(idx))
             loss = loss.sum()
             opt.zero_grad(set_to_none=True)
@@ -131,6 +145,12 @@ def main():
             opt.step()
             sched.step()
             loss_sum += loss.item()
+            if a.evals_per_epoch > 1 and (step_i + 1) % eval_every == 0 and (step_i + 1) < steps_per_epoch:
+                v = wp_of(model, XV, yv)
+                model.train()
+                print(f"  epoch {epoch + 1} step {step_i + 1}/{steps_per_epoch}: valid WP {v[2]:.5f}", flush=True)
+                if v[2] > best[0]:
+                    best = (v[2], epoch + 1, {k: t.detach().clone() for k, t in model.state_dict().items()})
         v = wp_of(model, XV, yv)
         history.append({"epoch": epoch + 1, "loss": loss_sum / steps_per_epoch, "valid_t0": v[0], "valid_t1": v[1], "valid_wp": v[2]})
         print(f"epoch {epoch + 1}/{a.epochs}: loss {loss_sum / steps_per_epoch:.5f}  valid WP {v[2]:.5f} "
@@ -140,7 +160,7 @@ def main():
 
     model.load_state_dict(best[2])
     linears = [m for m in model.net if isinstance(m, nn.Linear)]
-    arrays = {"mu": mu, "sigma": sigma, "n_layers": np.int64(len(linears))}
+    arrays = {"mu": mu[keep], "sigma": sigma[keep], "keep": keep.astype(np.int64), "n_layers": np.int64(len(linears))}
     for i, lin in enumerate(linears):
         arrays[f"W{i}"] = lin.weight.detach().numpy().T.astype(np.float32).copy()  # (in, out)
         arrays[f"b{i}"] = lin.bias.detach().numpy().astype(np.float32).copy()
@@ -149,6 +169,7 @@ def main():
             "train_rows": n, "train_sequences": side["sequences"], "stride": side["stride"],
             "valid_rows": int(len(xv)), "weight_power": a.weight_power, "lr": a.lr,
             "weight_decay": a.weight_decay, "dropout": a.dropout, "batch": a.batch, "seed": a.seed,
+            "drop_regex": a.drop_regex, "kept_features": int(len(keep)), "input_noise": a.input_noise,
             "history": history}
     Path(a.out).with_suffix(".json").write_text(json.dumps(meta, indent=2))
     print(f"saved {a.out} (best epoch {best[1]}, valid WP {best[0]:.5f})")
