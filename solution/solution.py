@@ -131,19 +131,51 @@ def _fold(model: dict) -> dict:
     return out
 
 
+class MlpReadout:
+    """Small ReLU MLP on the standardised feature vector (weights from train_mlp.py)."""
+
+    def __init__(self, path: Path):
+        d = np.load(path)
+        self.mu = d["mu"].astype(np.float64)
+        self.inv_sigma = 1.0 / d["sigma"].astype(np.float64)
+        n = int(d["n_layers"])
+        self.layers = [(d[f"W{i}"].astype(np.float64), d[f"b{i}"].astype(np.float64)) for i in range(n)]
+
+    def __call__(self, phi: np.ndarray) -> np.ndarray:
+        h = (phi - self.mu) * self.inv_sigma
+        last = len(self.layers) - 1
+        for i, (w, b) in enumerate(self.layers):
+            h = h @ w
+            h += b
+            if i != last:
+                np.maximum(h, 0.0, out=h)
+        return h
+
+
 class PredictionModel:
     def __init__(self, model_path: str | os.PathLike | None = None, blend: bool = True):
         with open(model_path or MODEL_PATH) as f:
             model = json.load(f)
+        # Blend: pred = w_lin * linear + w_mlp * mlp + w_gru * gru (per target).
         self.gru = None
-        self.w_gru = np.zeros(2)
+        self.mlp = None
+        self.w_lin, self.w_mlp, self.w_gru = np.ones(2), np.zeros(2), np.zeros(2)
         if blend and BLEND_PATH.exists():
             with open(BLEND_PATH) as f:
                 cfg = json.load(f)
-            self.w_gru = np.asarray(cfg["weight_on_gru"], dtype=np.float64)
-            if np.any(self.w_gru > 0):
+            if "weights" in cfg:
+                wts = cfg["weights"]
+                self.w_lin = np.asarray(wts.get("linear", [0.0, 0.0]), dtype=np.float64)
+                self.w_mlp = np.asarray(wts.get("mlp", [0.0, 0.0]), dtype=np.float64)
+                self.w_gru = np.asarray(wts.get("gru", [0.0, 0.0]), dtype=np.float64)
+            else:  # step-1 format
+                self.w_gru = np.asarray(cfg["weight_on_gru"], dtype=np.float64)
+                self.w_lin = 1.0 - self.w_gru
+            if np.any(self.w_gru != 0):
                 self.gru = GruBaseline(HERE / cfg.get("onnx", "baseline.onnx"))
-        self.w_lin = 1.0 - self.w_gru
+            if np.any(self.w_mlp != 0):
+                self.mlp = MlpReadout(HERE / cfg.get("mlp", "mlp.npz"))
+        self.use_lin = bool(np.any(self.w_lin != 0))
         if model.get("format") != "neutrino-wunder-linear-v1":
             raise ValueError(f"unsupported model format {model.get('format')!r}")
         layout = model["layout"]
@@ -156,6 +188,8 @@ class PredictionModel:
         self.vol_norm = bool(spec.get("vol_norm", False))
         self.lag = int(spec.get("diff_lag", 1)) if spec.get("use_diff", spec.get("use_diff1")) else 1
         self.w = _fold(model)
+        self.raw_idx = np.asarray(layout["raw_idx"], dtype=np.intp)
+        self.dyn_idx = np.asarray(layout["dyn_idx"], dtype=np.intp)
         self.use_mid = "mid" in self.w
         self.use_slow = "slow" in self.w
         self.use_diff = "diff" in self.w
@@ -218,33 +252,41 @@ class PredictionModel:
             return None
 
         scale = np.maximum(self.vol, self.floor) if self.vol_norm else None
-        pred = x @ self.w["raw"]
         if scale is not None:
             d /= scale
-        pred += d @ self.w["fast"]
+        blocks = [("raw", x), ("fast", d)]
         if self.use_mid:
-            np.subtract(x, self.ema_mid, out=tmp)
+            b = x - self.ema_mid
             if scale is not None:
-                tmp /= scale
-            pred += tmp @ self.w["mid"]
+                b /= scale
+            blocks.append(("mid", b))
         if self.use_slow:
-            np.subtract(x, self.ema_slow, out=tmp)
+            b = x - self.ema_slow
             if scale is not None:
-                tmp /= scale
-            pred += tmp @ self.w["slow"]
+                b /= scale
+            blocks.append(("slow", b))
         if self.use_diff:
-            np.subtract(x, self.hist[slot], out=tmp)
+            b = x - self.hist[slot]
             if scale is not None:
-                tmp /= scale
-            pred += tmp @ self.w["diff"]
+                b /= scale
+            blocks.append(("diff", b))
         if self.use_imb:
             vb = x[self.imb_bid]
             va = x[self.imb_ask]
-            pred += ((vb - va) / (np.abs(vb) + np.abs(va) + self.imb_floor)) @ self.w["imb"]
-        pred += self.bias
+            blocks.append(("imb", (vb - va) / (np.abs(vb) + np.abs(va) + self.imb_floor)))
         self.hist[slot] = x
+
+        pred = np.zeros(2)
+        if self.use_lin:
+            lin = self.bias.copy()
+            for name, b in blocks:
+                lin += b @ self.w[name]
+            pred += self.w_lin * lin
+        if self.mlp is not None:
+            phi = np.concatenate([b[self.raw_idx] if n == "raw" else (b if n == "imb" else b[self.dyn_idx]) for n, b in blocks])
+            pred += self.w_mlp * self.mlp(phi)
         if gru_pred is not None:
-            pred = self.w_lin * pred + self.w_gru * gru_pred
+            pred += self.w_gru * gru_pred
         out = pred.astype(np.float32)
         if not np.isfinite(out).all():
             out = np.zeros(2, dtype=np.float32)
