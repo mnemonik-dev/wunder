@@ -40,7 +40,13 @@ BLEND_PATH = HERE / "blend.json"
 
 
 class GruBaseline:
-    """The organisers' stateful GRU (ONNX), one row per call, one CPU thread."""
+    """The organisers' stateful GRU (ONNX), one row per call, one CPU thread.
+
+    Uses two pre-bound I/O bindings that ping-pong the hidden state between
+    two buffer pairs, which removes the per-call tensor allocation of
+    ``session.run`` (about 30% of the per-row cost). Outputs are bit-identical
+    to the plain ``session.run`` loop of the organisers' baseline.
+    """
 
     def __init__(self, path: Path):
         import onnxruntime as ort
@@ -54,18 +60,33 @@ class GruBaseline:
         options.add_session_config_entry("session.intra_op.allow_spinning", "0")
         options.add_session_config_entry("session.inter_op.allow_spinning", "0")
         self.session = ort.InferenceSession(str(path), sess_options=options, providers=["CPUExecutionProvider"])
-        self.h0 = np.zeros((1, 1, 128), dtype=np.float32)
-        self.h1 = np.zeros((1, 1, 128), dtype=np.float32)
-        self._x = np.zeros((1, 1, N_FEATURES), dtype=np.float32)
+        self.x = np.zeros((1, 1, N_FEATURES), dtype=np.float32)
+        self.pred = np.zeros((1, 1, 2), dtype=np.float32)
+        self.h = [np.zeros((1, 1, 128), dtype=np.float32) for _ in range(4)]  # a0, a1, b0, b1
+        self.bindings = [self._bind(0, 2), self._bind(2, 0)]
+        self.parity = 0
+
+    def _bind(self, src: int, dst: int):
+        b = self.session.io_binding()
+        bind = lambda name, arr, inp: (b.bind_input if inp else b.bind_output)(name, "cpu", 0, np.float32, arr.shape, arr.ctypes.data)
+        bind("features", self.x, True)
+        bind("hidden_0", self.h[src], True)
+        bind("hidden_1", self.h[src + 1], True)
+        bind("prediction", self.pred, False)
+        bind("next_hidden_0", self.h[dst], False)
+        bind("next_hidden_1", self.h[dst + 1], False)
+        return b
 
     def reset(self) -> None:
-        self.h0.fill(0.0)
-        self.h1.fill(0.0)
+        for h in self.h:
+            h.fill(0.0)
+        self.parity = 0
 
     def step(self, state: np.ndarray) -> np.ndarray:
-        self._x[0, 0] = state
-        pred, self.h0, self.h1 = self.session.run(None, {"features": self._x, "hidden_0": self.h0, "hidden_1": self.h1})
-        return pred[0, 0]
+        self.x[0, 0] = state
+        self.session.run_with_iobinding(self.bindings[self.parity])
+        self.parity ^= 1
+        return self.pred[0, 0]
 
 
 def _fold(model: dict) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:

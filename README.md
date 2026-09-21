@@ -32,7 +32,8 @@ guide, rules, FAQ, prizes) and [starterpack/METRIC.md](starterpack/METRIC.md).
 | `scripts/package_submission.sh` | `solution/` → `submission.zip` + pre-flight |
 | `scripts/train_neutrino.sh` | build `neutrino-wunder`, train `solution/model.json`, parity test, quick score |
 | `scripts/parity_test.py` | Rust trainer predictions == Python `solution.py` predictions |
-| `solution/` | the submission: `solution.py`, `model.json`, `MODEL.md` |
+| `scripts/predict_valid.py`, `scripts/blend.py` | cache validation predictions; evaluate blends of two models offline |
+| `solution/` | the submission: `solution.py`, `model.json`, `blend.json`, `baseline.onnx`, `MODEL.md` |
 | `starterpack/` | organisers' docs, `utils.py` (scorer), `baseline/` (stateful GRU, ONNX) |
 | `datasets/` | git-ignored Parquet data |
 | `docker/Dockerfile.scorer` | replica of the scoring image from the submission guide |
@@ -88,21 +89,31 @@ fitness being the *competition metric on a held-out validation slice*. The
 champion is exported as `solution/model.json`; `solution/solution.py` replays
 it with four `(112, 2)` mat-vecs per row.
 
-Results on this machine (1,000-sequence train subset; see
-`solution/train_report.json` for every GA trial):
+Results on the complete validation set (1,873 sequences, 3.53 M scored rows,
+organisers' scorer). See `solution/train_report.json` for every GA trial and
+`solution/blend.json` for the blend weights.
 
-| Model | Validation WP, all 1,873 seqs | WP, 50-seq slice | µs/row (1 thread) | projected test time |
-|---|---:|---:|---:|---:|
-| Organisers' GRU baseline (ONNX) | 0.6171 (reported) | 0.6564 | 40.1 | 26 min |
-| **Neutrino linear read-out** (`solution/model.json`) | **0.6161** (0.6157 on the 1,813 seqs the GA never saw) | **0.6580** | **10.7** | **7 min** |
+| Model | Validation WP (t0 / t1) | µs/row (1 thread) | projected test time |
+|---|---:|---:|---:|
+| Organisers' GRU baseline (ONNX), reproduced locally | 0.6171 (0.588 / 0.646) | 40 | 26 min |
+| Neutrino linear read-out (`model.json`) | 0.6161 (0.612 / 0.620) | 11 | 7 min |
+| **Shipped: blend of both** (`solution/`) | **0.6641** (0.657 / 0.671) | 54 | 35 min |
 
-GA run: population 14 × 6 generations, seed 42, 80 training / 60 hold-out
-sequences per candidate (≈ 1–9 s each), champion refit on 1,000 sequences
-(19.9 M rows, 120 features) in 46 s, full validation scoring in 102 s.
-Champion: fast EMA span 57, slow EMA span 606, raw prices on, instrument `i1`
-off, no slow-residual / one-step-difference blocks, ridge λ = 2.2e-3,
-sample-weight power 0.75. Rust vs Python parity: max |Δ| = 0 over 39,802
-predictions.
+The two models are complementary (the linear read-out wins on `t0`, the GRU
+on `t1`). Blend weights (0.325 / 0.350 on the GRU per target) were chosen on
+the first half of the validation sequences; on the untouched second half the
+blend scores 0.6649, so the gain is not an artefact of the selection.
+
+GA run behind `model.json`: population 14 × 6 generations, seed 42, 80
+training / 60 hold-out sequences per candidate, champion refit on 1,000
+sequences (19.9 M rows, 120 features) in 46 s. Champion: fast EMA span 57,
+raw prices on, instrument `i1` off, ridge λ = 2.2e-3, sample-weight power
+0.75; 0.6157 on the 1,813 validation sequences the GA never saw. Rust vs
+Python parity: max |Δ| = 0 over 39,802 predictions.
+
+Offline experiments: `scripts/predict_valid.py` caches a solution's scored
+validation predictions (multi-process), `scripts/blend.py` evaluates blends
+of two caches with an honest half/half split.
 
 Design, gene schema and ideas for the hackathon are in
 [docs/NEUTRINO_SOLUTION.md](docs/NEUTRINO_SOLUTION.md).
