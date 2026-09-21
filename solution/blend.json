@@ -1,12 +1,12 @@
 {
   "onnx": "baseline.onnx",
   "weight_on_gru": [
-    0.325,
-    0.35000000000000003
+    0.275,
+    0.325
   ],
   "note": "pred = (1-w)*linear + w*gru per target; weights chosen on the first half of valid.parquet sequences (scripts/blend.py)",
   "validation": {
-    "full_wp": 0.664137991073432,
-    "eval_half_wp": 0.6649010456075745
+    "full_wp": 0.6663251968231287,
+    "eval_half_wp": 0.6679895432025086
   }
 }

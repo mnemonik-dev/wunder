@@ -1,19 +1,25 @@
 {
   "champion": {
-    "lambda": 0.0021747702110512545,
+    "lambda": 0.0003021582483841608,
     "spec": {
-      "ema_fast": 57,
-      "ema_slow": 606,
+      "diff_lag": 42,
+      "ema_fast": 28,
+      "ema_mid": 16,
+      "ema_slow": 1248,
       "raw_prices": true,
-      "use_diff1": false,
+      "use_diff": true,
+      "use_dmid": false,
       "use_dslow": false,
-      "use_i1": false
+      "use_i1": true,
+      "use_imbalance": false,
+      "vol_norm": false,
+      "vol_span": 1236
     },
     "weight_power": 0.75
   },
-  "ga_holdout_fitness": 0.6244236419520985,
+  "ga_holdout_fitness": 0.6241002644082858,
   "metrics": {
-    "elapsed_seconds": 380.172938443,
+    "elapsed_seconds": 688.023235303,
     "ga": {
       "ga_holdout_sequences": 60,
       "ga_train_sequences": 80,
@@ -21,1046 +27,1518 @@
       "mutation_rate": 0.25,
       "population": 14,
       "seed": 42,
-      "trials": 64
+      "trials": 68
     },
-    "ga_holdout_fitness": 0.6244236419520985,
+    "ga_holdout_fitness": 0.6241002644082858,
     "valid": {
       "selected_rows": 3528273,
-      "t0": 0.6124047740851657,
-      "t1": 0.6198208047098935,
-      "weighted_pearson": 0.6161127893975296
+      "t0": 0.6300539829378269,
+      "t1": 0.6362188794220449,
+      "weighted_pearson": 0.6331364311799359
     },
     "valid_excluding_ga_holdout": {
       "selected_rows": 3417242,
-      "t0": 0.611840775044665,
-      "t1": 0.6196370127165592,
-      "weighted_pearson": 0.6157388938806121
+      "t0": 0.6295957222550532,
+      "t1": 0.6361611829892424,
+      "weighted_pearson": 0.6328784526221478
     }
   },
   "trials": [
     {
-      "fitness": 0.5988747623614703,
+      "fitness": 0.5941813755729342,
       "params": {
         "lambda": 0.000705088055478153,
         "spec": {
+          "diff_lag": 26,
           "ema_fast": 42,
+          "ema_mid": 233,
           "ema_slow": 1902,
           "raw_prices": true,
-          "use_diff1": true,
+          "use_diff": true,
+          "use_dmid": true,
           "use_dslow": true,
-          "use_i1": false
+          "use_i1": false,
+          "use_imbalance": false,
+          "vol_norm": false,
+          "vol_span": 1915
         },
         "weight_power": 1.5
       },
-      "seconds": 3.095018292
+      "seconds": 5.033910777
     },
     {
-      "fitness": 0.5370597238625773,
+      "fitness": 0.6096951761903646,
       "params": {
-        "lambda": 0.028337326858988224,
+        "lambda": 0.1578076059633733,
         "spec": {
-          "ema_fast": 31,
-          "ema_slow": 1807,
-          "raw_prices": false,
-          "use_diff1": true,
-          "use_dslow": false,
-          "use_i1": false
+          "diff_lag": 42,
+          "ema_fast": 35,
+          "ema_mid": 16,
+          "ema_slow": 368,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": true,
+          "use_dslow": true,
+          "use_i1": true,
+          "use_imbalance": false,
+          "vol_norm": false,
+          "vol_span": 1351
         },
         "weight_power": 0.25
       },
-      "seconds": 1.616090611
+      "seconds": 19.94616418
     },
     {
-      "fitness": 0.5764614062969795,
+      "fitness": 0.5388969448108061,
       "params": {
-        "lambda": 1.0930888488491057,
+        "lambda": 1.9459574916032425,
         "spec": {
-          "ema_fast": 11,
-          "ema_slow": 661,
+          "diff_lag": 3,
+          "ema_fast": 14,
+          "ema_mid": 233,
+          "ema_slow": 462,
           "raw_prices": false,
-          "use_diff1": true,
+          "use_diff": true,
+          "use_dmid": false,
           "use_dslow": true,
-          "use_i1": true
-        },
-        "weight_power": 1.5
-      },
-      "seconds": 7.04840403
-    },
-    {
-      "fitness": 0.6173998784508032,
-      "params": {
-        "lambda": 0.0035157177354214085,
-        "spec": {
-          "ema_fast": 41,
-          "ema_slow": 227,
-          "raw_prices": true,
-          "use_diff1": false,
-          "use_dslow": false,
-          "use_i1": true
-        },
-        "weight_power": 0.25
-      },
-      "seconds": 2.755443122
-    },
-    {
-      "fitness": 0.6053802321233701,
-      "params": {
-        "lambda": 0.00522410216614228,
-        "spec": {
-          "ema_fast": 47,
-          "ema_slow": 1651,
-          "raw_prices": true,
-          "use_diff1": false,
-          "use_dslow": false,
-          "use_i1": false
-        },
-        "weight_power": 1.75
-      },
-      "seconds": 1.1637416329999999
-    },
-    {
-      "fitness": 0.6000923453113354,
-      "params": {
-        "lambda": 0.11603316718036458,
-        "spec": {
-          "ema_fast": 15,
-          "ema_slow": 1258,
-          "raw_prices": true,
-          "use_diff1": true,
-          "use_dslow": true,
-          "use_i1": true
-        },
-        "weight_power": 1.5
-      },
-      "seconds": 8.90670261
-    },
-    {
-      "fitness": 0.5854208761147008,
-      "params": {
-        "lambda": 0.00011216491543851813,
-        "spec": {
-          "ema_fast": 3,
-          "ema_slow": 1247,
-          "raw_prices": false,
-          "use_diff1": false,
-          "use_dslow": true,
-          "use_i1": true
-        },
-        "weight_power": 0.5
-      },
-      "seconds": 4.03345326
-    },
-    {
-      "fitness": 0.6025558468392687,
-      "params": {
-        "lambda": 0.055239836867050814,
-        "spec": {
-          "ema_fast": 20,
-          "ema_slow": 811,
-          "raw_prices": false,
-          "use_diff1": false,
-          "use_dslow": true,
-          "use_i1": false
-        },
-        "weight_power": 2.0
-      },
-      "seconds": 1.621581543
-    },
-    {
-      "fitness": 0.5655601592467394,
-      "params": {
-        "lambda": 0.00004252973821203603,
-        "spec": {
-          "ema_fast": 29,
-          "ema_slow": 412,
-          "raw_prices": false,
-          "use_diff1": true,
-          "use_dslow": false,
-          "use_i1": true
-        },
-        "weight_power": 0.5
-      },
-      "seconds": 3.9916848700000003
-    },
-    {
-      "fitness": 0.5570841147420209,
-      "params": {
-        "lambda": 1.1100918647710445,
-        "spec": {
-          "ema_fast": 28,
-          "ema_slow": 371,
-          "raw_prices": false,
-          "use_diff1": false,
-          "use_dslow": true,
-          "use_i1": false
-        },
-        "weight_power": 1.5
-      },
-      "seconds": 1.640312392
-    },
-    {
-      "fitness": 0.5402946655551966,
-      "params": {
-        "lambda": 1.9990357953638,
-        "spec": {
-          "ema_fast": 3,
-          "ema_slow": 776,
-          "raw_prices": true,
-          "use_diff1": true,
-          "use_dslow": false,
-          "use_i1": true
-        },
-        "weight_power": 0.5
-      },
-      "seconds": 5.2897739999999995
-    },
-    {
-      "fitness": 0.6208768536211103,
-      "params": {
-        "lambda": 0.004158755582284178,
-        "spec": {
-          "ema_fast": 57,
-          "ema_slow": 676,
-          "raw_prices": true,
-          "use_diff1": true,
-          "use_dslow": false,
-          "use_i1": true
-        },
-        "weight_power": 1.0
-      },
-      "seconds": 5.178963896
-    },
-    {
-      "fitness": 0.5958059662021533,
-      "params": {
-        "lambda": 0.0005746834700138439,
-        "spec": {
-          "ema_fast": 44,
-          "ema_slow": 1340,
-          "raw_prices": true,
-          "use_diff1": true,
-          "use_dslow": true,
-          "use_i1": true
-        },
-        "weight_power": 1.0
-      },
-      "seconds": 8.798891093
-    },
-    {
-      "fitness": 0.5993953389715176,
-      "params": {
-        "lambda": 0.038445418223446666,
-        "spec": {
-          "ema_fast": 52,
-          "ema_slow": 315,
-          "raw_prices": false,
-          "use_diff1": true,
-          "use_dslow": true,
-          "use_i1": true
-        },
-        "weight_power": 1.5
-      },
-      "seconds": 7.006264635
-    },
-    {
-      "fitness": 0.577791549310773,
-      "params": {
-        "lambda": 0.23627241770717072,
-        "spec": {
-          "ema_fast": 47,
-          "ema_slow": 811,
-          "raw_prices": true,
-          "use_diff1": false,
-          "use_dslow": false,
-          "use_i1": false
-        },
-        "weight_power": 2.0
-      },
-      "seconds": 1.150568928
-    },
-    {
-      "fitness": 0.5916928159852235,
-      "params": {
-        "lambda": 0.000705088055478153,
-        "spec": {
-          "ema_fast": 42,
-          "ema_slow": 1902,
-          "raw_prices": true,
-          "use_diff1": true,
-          "use_dslow": true,
-          "use_i1": true
-        },
-        "weight_power": 0.25
-      },
-      "seconds": 8.81663765
-    },
-    {
-      "fitness": 0.5884956701346644,
-      "params": {
-        "lambda": 0.0029018511194666093,
-        "spec": {
-          "ema_fast": 47,
-          "ema_slow": 1246,
-          "raw_prices": true,
-          "use_diff1": false,
-          "use_dslow": true,
-          "use_i1": true
-        },
-        "weight_power": 1.75
-      },
-      "seconds": 5.367080953
-    },
-    {
-      "fitness": 0.621273163029141,
-      "params": {
-        "lambda": 0.001636072471008209,
-        "spec": {
-          "ema_fast": 57,
-          "ema_slow": 676,
-          "raw_prices": true,
-          "use_diff1": true,
-          "use_dslow": false,
-          "use_i1": true
-        },
-        "weight_power": 1.0
-      },
-      "seconds": 5.241487365
-    },
-    {
-      "fitness": 0.6072717015083793,
-      "params": {
-        "lambda": 0.1375436494189951,
-        "spec": {
-          "ema_fast": 41,
-          "ema_slow": 310,
-          "raw_prices": true,
-          "use_diff1": false,
-          "use_dslow": true,
-          "use_i1": true
-        },
-        "weight_power": 0.25
-      },
-      "seconds": 5.241904326
-    },
-    {
-      "fitness": 0.598069270029749,
-      "params": {
-        "lambda": 0.000705088055478153,
-        "spec": {
-          "ema_fast": 50,
-          "ema_slow": 1902,
-          "raw_prices": true,
-          "use_diff1": true,
-          "use_dslow": true,
-          "use_i1": false
-        },
-        "weight_power": 1.5
-      },
-      "seconds": 3.079488093
-    },
-    {
-      "fitness": 0.5976965244772794,
-      "params": {
-        "lambda": 0.00522410216614228,
-        "spec": {
-          "ema_fast": 20,
-          "ema_slow": 1651,
-          "raw_prices": true,
-          "use_diff1": false,
-          "use_dslow": false,
-          "use_i1": false
-        },
-        "weight_power": 2.0
-      },
-      "seconds": 1.120767046
-    },
-    {
-      "fitness": 0.5915901031517474,
-      "params": {
-        "lambda": 0.352464110368146,
-        "spec": {
-          "ema_fast": 15,
-          "ema_slow": 811,
-          "raw_prices": false,
-          "use_diff1": false,
-          "use_dslow": true,
-          "use_i1": false
-        },
-        "weight_power": 2.0
-      },
-      "seconds": 1.594335987
-    },
-    {
-      "fitness": 0.6122381649231158,
-      "params": {
-        "lambda": 0.000705088055478153,
-        "spec": {
-          "ema_fast": 20,
-          "ema_slow": 811,
-          "raw_prices": true,
-          "use_diff1": false,
-          "use_dslow": true,
-          "use_i1": false
-        },
-        "weight_power": 1.5
-      },
-      "seconds": 2.016756605
-    },
-    {
-      "fitness": 0.6108592078118896,
-      "params": {
-        "lambda": 0.006967013640670127,
-        "spec": {
-          "ema_fast": 47,
-          "ema_slow": 1651,
-          "raw_prices": true,
-          "use_diff1": false,
-          "use_dslow": false,
-          "use_i1": false
-        },
-        "weight_power": 1.5
-      },
-      "seconds": 1.1418193429999999
-    },
-    {
-      "fitness": 0.6010602827484021,
-      "params": {
-        "lambda": 0.09706643878163827,
-        "spec": {
-          "ema_fast": 20,
-          "ema_slow": 811,
-          "raw_prices": false,
-          "use_diff1": false,
-          "use_dslow": true,
-          "use_i1": false
-        },
-        "weight_power": 2.0
-      },
-      "seconds": 1.6174124669999999
-    },
-    {
-      "fitness": 0.6210687417672498,
-      "params": {
-        "lambda": 0.002901531108293945,
-        "spec": {
-          "ema_fast": 57,
-          "ema_slow": 1690,
-          "raw_prices": true,
-          "use_diff1": true,
-          "use_dslow": false,
-          "use_i1": true
-        },
-        "weight_power": 1.0
-      },
-      "seconds": 5.157921354
-    },
-    {
-      "fitness": 0.6232045603122782,
-      "params": {
-        "lambda": 0.001636072471008209,
-        "spec": {
-          "ema_fast": 57,
-          "ema_slow": 676,
-          "raw_prices": true,
-          "use_diff1": false,
-          "use_dslow": false,
-          "use_i1": false
-        },
-        "weight_power": 1.0
-      },
-      "seconds": 1.143995975
-    },
-    {
-      "fitness": 0.6015948251043828,
-      "params": {
-        "lambda": 0.005390916031650613,
-        "spec": {
-          "ema_fast": 40,
-          "ema_slow": 1651,
-          "raw_prices": true,
-          "use_diff1": false,
-          "use_dslow": false,
-          "use_i1": true
-        },
-        "weight_power": 2.0
-      },
-      "seconds": 2.707126837
-    },
-    {
-      "fitness": 0.6211966501229658,
-      "params": {
-        "lambda": 0.0021747702110512545,
-        "spec": {
-          "ema_fast": 57,
-          "ema_slow": 676,
-          "raw_prices": true,
-          "use_diff1": true,
-          "use_dslow": false,
-          "use_i1": true
-        },
-        "weight_power": 1.0
-      },
-      "seconds": 7.889134945
-    },
-    {
-      "fitness": 0.6024165420319847,
-      "params": {
-        "lambda": 0.1375436494189951,
-        "spec": {
-          "ema_fast": 41,
-          "ema_slow": 310,
-          "raw_prices": true,
-          "use_diff1": false,
-          "use_dslow": false,
-          "use_i1": true
-        },
-        "weight_power": 1.0
-      },
-      "seconds": 4.309974449
-    },
-    {
-      "fitness": 0.6176903648819305,
-      "params": {
-        "lambda": 0.0013574966432581066,
-        "spec": {
-          "ema_fast": 41,
-          "ema_slow": 227,
-          "raw_prices": true,
-          "use_diff1": false,
-          "use_dslow": false,
-          "use_i1": true
-        },
-        "weight_power": 0.25
-      },
-      "seconds": 2.710157078
-    },
-    {
-      "fitness": 0.6111077532307623,
-      "params": {
-        "lambda": 0.0029190621087733883,
-        "spec": {
-          "ema_fast": 19,
-          "ema_slow": 978,
-          "raw_prices": true,
-          "use_diff1": false,
-          "use_dslow": false,
-          "use_i1": false
-        },
-        "weight_power": 1.5
-      },
-      "seconds": 1.154040617
-    },
-    {
-      "fitness": 0.6144118748646472,
-      "params": {
-        "lambda": 0.000705088055478153,
-        "spec": {
-          "ema_fast": 50,
-          "ema_slow": 1713,
-          "raw_prices": true,
-          "use_diff1": true,
-          "use_dslow": false,
-          "use_i1": false
-        },
-        "weight_power": 1.5
-      },
-      "seconds": 1.982535268
-    },
-    {
-      "fitness": 0.6146412338031463,
-      "params": {
-        "lambda": 0.000705088055478153,
-        "spec": {
-          "ema_fast": 53,
-          "ema_slow": 1094,
-          "raw_prices": true,
-          "use_diff1": false,
-          "use_dslow": false,
-          "use_i1": false
-        },
-        "weight_power": 1.5
-      },
-      "seconds": 1.121359759
-    },
-    {
-      "fitness": 0.6124822627367903,
-      "params": {
-        "lambda": 0.000705088055478153,
-        "spec": {
-          "ema_fast": 22,
-          "ema_slow": 811,
-          "raw_prices": true,
-          "use_diff1": false,
-          "use_dslow": true,
-          "use_i1": false
-        },
-        "weight_power": 1.5
-      },
-      "seconds": 1.9731707630000002
-    },
-    {
-      "fitness": 0.6212842478287215,
-      "params": {
-        "lambda": 0.0014912789795536664,
-        "spec": {
-          "ema_fast": 57,
-          "ema_slow": 676,
-          "raw_prices": true,
-          "use_diff1": true,
-          "use_dslow": false,
-          "use_i1": true
-        },
-        "weight_power": 1.0
-      },
-      "seconds": 5.251507437
-    },
-    {
-      "fitness": 0.6208030624983933,
-      "params": {
-        "lambda": 0.00020334132946071647,
-        "spec": {
-          "ema_fast": 60,
-          "ema_slow": 588,
-          "raw_prices": true,
-          "use_diff1": false,
-          "use_dslow": false,
-          "use_i1": true
-        },
-        "weight_power": 1.0
-      },
-      "seconds": 2.699295323
-    },
-    {
-      "fitness": 0.6232045603122782,
-      "params": {
-        "lambda": 0.001636072471008209,
-        "spec": {
-          "ema_fast": 57,
-          "ema_slow": 606,
-          "raw_prices": true,
-          "use_diff1": false,
-          "use_dslow": false,
-          "use_i1": false
-        },
-        "weight_power": 1.0
-      },
-      "seconds": 1.124670497
-    },
-    {
-      "fitness": 0.6211798825934277,
-      "params": {
-        "lambda": 0.001636072471008209,
-        "spec": {
-          "ema_fast": 58,
-          "ema_slow": 676,
-          "raw_prices": true,
-          "use_diff1": true,
-          "use_dslow": false,
-          "use_i1": true
-        },
-        "weight_power": 1.0
-      },
-      "seconds": 6.144420719
-    },
-    {
-      "fitness": 0.6229455452313537,
-      "params": {
-        "lambda": 0.0021747702110512545,
-        "spec": {
-          "ema_fast": 57,
-          "ema_slow": 676,
-          "raw_prices": true,
-          "use_diff1": false,
-          "use_dslow": false,
-          "use_i1": false
-        },
-        "weight_power": 1.0
-      },
-      "seconds": 2.1822858
-    },
-    {
-      "fitness": 0.6138040546850059,
-      "params": {
-        "lambda": 0.0015433081234403146,
-        "spec": {
-          "ema_fast": 57,
-          "ema_slow": 419,
-          "raw_prices": true,
-          "use_diff1": true,
-          "use_dslow": false,
-          "use_i1": false
-        },
-        "weight_power": 1.5
-      },
-      "seconds": 3.907639559
-    },
-    {
-      "fitness": 0.6218182649450498,
-      "params": {
-        "lambda": 0.001636072471008209,
-        "spec": {
-          "ema_fast": 51,
-          "ema_slow": 676,
-          "raw_prices": true,
-          "use_diff1": true,
-          "use_dslow": false,
-          "use_i1": true
-        },
-        "weight_power": 1.0
-      },
-      "seconds": 7.543951783
-    },
-    {
-      "fitness": 0.6212842478287215,
-      "params": {
-        "lambda": 0.0014912789795536664,
-        "spec": {
-          "ema_fast": 57,
-          "ema_slow": 928,
-          "raw_prices": true,
-          "use_diff1": true,
-          "use_dslow": false,
-          "use_i1": true
-        },
-        "weight_power": 1.0
-      },
-      "seconds": 5.123065609
-    },
-    {
-      "fitness": 0.6209399549753855,
-      "params": {
-        "lambda": 0.0026285552219199857,
-        "spec": {
-          "ema_fast": 59,
-          "ema_slow": 676,
-          "raw_prices": true,
-          "use_diff1": true,
-          "use_dslow": false,
-          "use_i1": true
-        },
-        "weight_power": 1.0
-      },
-      "seconds": 5.255049737
-    },
-    {
-      "fitness": 0.6213446849480309,
-      "params": {
-        "lambda": 0.002901531108293945,
-        "spec": {
-          "ema_fast": 57,
-          "ema_slow": 1690,
-          "raw_prices": true,
-          "use_diff1": false,
-          "use_dslow": false,
-          "use_i1": true
-        },
-        "weight_power": 1.0
-      },
-      "seconds": 2.776530198
-    },
-    {
-      "fitness": 0.6149718713886024,
-      "params": {
-        "lambda": 0.00005463984388431417,
-        "spec": {
-          "ema_fast": 50,
-          "ema_slow": 651,
-          "raw_prices": true,
-          "use_diff1": false,
-          "use_dslow": false,
-          "use_i1": false
-        },
-        "weight_power": 1.5
-      },
-      "seconds": 1.166803922
-    },
-    {
-      "fitness": 0.6133247501978003,
-      "params": {
-        "lambda": 0.0014912789795536664,
-        "spec": {
-          "ema_fast": 58,
-          "ema_slow": 676,
-          "raw_prices": true,
-          "use_diff1": true,
-          "use_dslow": false,
-          "use_i1": true
-        },
-        "weight_power": 1.5
-      },
-      "seconds": 7.852106889
-    },
-    {
-      "fitness": 0.612933963530818,
-      "params": {
-        "lambda": 0.00016819822186223384,
-        "spec": {
-          "ema_fast": 57,
-          "ema_slow": 730,
-          "raw_prices": true,
-          "use_diff1": true,
-          "use_dslow": false,
-          "use_i1": true
-        },
-        "weight_power": 1.5
-      },
-      "seconds": 9.835860153
-    },
-    {
-      "fitness": 0.6214533607960637,
-      "params": {
-        "lambda": 0.0023075294170577646,
-        "spec": {
-          "ema_fast": 57,
-          "ema_slow": 928,
-          "raw_prices": true,
-          "use_diff1": false,
-          "use_dslow": false,
-          "use_i1": true
-        },
-        "weight_power": 1.0
-      },
-      "seconds": 5.035514559
-    },
-    {
-      "fitness": 0.6211906130723999,
-      "params": {
-        "lambda": 0.0014912789795536664,
-        "spec": {
-          "ema_fast": 58,
-          "ema_slow": 527,
-          "raw_prices": true,
-          "use_diff1": true,
-          "use_dslow": false,
-          "use_i1": true
-        },
-        "weight_power": 1.0
-      },
-      "seconds": 6.421393183
-    },
-    {
-      "fitness": 0.6191433873434626,
-      "params": {
-        "lambda": 0.0021747702110512545,
-        "spec": {
-          "ema_fast": 57,
-          "ema_slow": 831,
-          "raw_prices": true,
-          "use_diff1": false,
-          "use_dslow": false,
-          "use_i1": false
+          "use_i1": false,
+          "use_imbalance": false,
+          "vol_norm": false,
+          "vol_span": 1875
         },
         "weight_power": 1.25
       },
-      "seconds": 1.138906004
+      "seconds": 3.009394029
     },
     {
-      "fitness": 0.6229455452313537,
+      "fitness": 0.5906502732210517,
       "params": {
-        "lambda": 0.0021747702110512545,
+        "lambda": 0.00006462879491975068,
         "spec": {
-          "ema_fast": 57,
-          "ema_slow": 606,
+          "diff_lag": 36,
+          "ema_fast": 36,
+          "ema_mid": 205,
+          "ema_slow": 1930,
           "raw_prices": true,
-          "use_diff1": false,
-          "use_dslow": false,
-          "use_i1": false
+          "use_diff": true,
+          "use_dmid": false,
+          "use_dslow": true,
+          "use_i1": false,
+          "use_imbalance": false,
+          "vol_norm": true,
+          "vol_span": 66
         },
-        "weight_power": 1.0
+        "weight_power": 0.25
       },
-      "seconds": 1.11024495
+      "seconds": 3.541816691
     },
     {
-      "fitness": 0.6182792866625944,
+      "fitness": 0.586682480038408,
       "params": {
-        "lambda": 0.001636072471008209,
+        "lambda": 0.0007631887790190097,
         "spec": {
-          "ema_fast": 57,
-          "ema_slow": 676,
+          "diff_lag": 22,
+          "ema_fast": 4,
+          "ema_mid": 199,
+          "ema_slow": 1049,
           "raw_prices": true,
-          "use_diff1": true,
-          "use_dslow": false,
-          "use_i1": true
-        },
-        "weight_power": 1.25
-      },
-      "seconds": 5.281845536
-    },
-    {
-      "fitness": 0.6232045603122782,
-      "params": {
-        "lambda": 0.001636072471008209,
-        "spec": {
-          "ema_fast": 57,
-          "ema_slow": 912,
-          "raw_prices": true,
-          "use_diff1": false,
-          "use_dslow": false,
-          "use_i1": false
-        },
-        "weight_power": 1.0
-      },
-      "seconds": 1.137287197
-    },
-    {
-      "fitness": 0.621273163029141,
-      "params": {
-        "lambda": 0.001636072471008209,
-        "spec": {
-          "ema_fast": 57,
-          "ema_slow": 758,
-          "raw_prices": true,
-          "use_diff1": true,
-          "use_dslow": false,
-          "use_i1": true
-        },
-        "weight_power": 1.0
-      },
-      "seconds": 5.303036281
-    },
-    {
-      "fitness": 0.6191433873434626,
-      "params": {
-        "lambda": 0.0021747702110512545,
-        "spec": {
-          "ema_fast": 57,
-          "ema_slow": 676,
-          "raw_prices": true,
-          "use_diff1": false,
-          "use_dslow": false,
-          "use_i1": false
-        },
-        "weight_power": 1.25
-      },
-      "seconds": 1.152064722
-    },
-    {
-      "fitness": 0.6232045603122782,
-      "params": {
-        "lambda": 0.001636072471008209,
-        "spec": {
-          "ema_fast": 57,
-          "ema_slow": 698,
-          "raw_prices": true,
-          "use_diff1": false,
-          "use_dslow": false,
-          "use_i1": false
-        },
-        "weight_power": 1.0
-      },
-      "seconds": 1.157094282
-    },
-    {
-      "fitness": 0.6229455452313537,
-      "params": {
-        "lambda": 0.0021747702110512545,
-        "spec": {
-          "ema_fast": 57,
-          "ema_slow": 1064,
-          "raw_prices": true,
-          "use_diff1": false,
-          "use_dslow": false,
-          "use_i1": false
-        },
-        "weight_power": 1.0
-      },
-      "seconds": 1.113941039
-    },
-    {
-      "fitness": 0.6232372203323342,
-      "params": {
-        "lambda": 0.001636072471008209,
-        "spec": {
-          "ema_fast": 56,
-          "ema_slow": 676,
-          "raw_prices": true,
-          "use_diff1": false,
-          "use_dslow": false,
-          "use_i1": false
-        },
-        "weight_power": 1.0
-      },
-      "seconds": 1.116598041
-    },
-    {
-      "fitness": 0.6244236419520985,
-      "params": {
-        "lambda": 0.0021747702110512545,
-        "spec": {
-          "ema_fast": 57,
-          "ema_slow": 606,
-          "raw_prices": true,
-          "use_diff1": false,
-          "use_dslow": false,
-          "use_i1": false
+          "use_diff": true,
+          "use_dmid": false,
+          "use_dslow": true,
+          "use_i1": true,
+          "use_imbalance": false,
+          "vol_norm": false,
+          "vol_span": 1255
         },
         "weight_power": 0.75
       },
-      "seconds": 1.124351279
+      "seconds": 9.567033562
     },
     {
-      "fitness": 0.6215242889926005,
+      "fitness": 0.5145266823728732,
       "params": {
-        "lambda": 0.004639606862868825,
+        "lambda": 0.00004252973821203603,
         "spec": {
-          "ema_fast": 58,
-          "ema_slow": 676,
-          "raw_prices": true,
-          "use_diff1": false,
+          "diff_lag": 23,
+          "ema_fast": 29,
+          "ema_mid": 248,
+          "ema_slow": 412,
+          "raw_prices": false,
+          "use_diff": true,
+          "use_dmid": false,
           "use_dslow": false,
-          "use_i1": false
+          "use_i1": true,
+          "use_imbalance": false,
+          "vol_norm": true,
+          "vol_span": 1732
+        },
+        "weight_power": 0.5
+      },
+      "seconds": 4.588487063
+    },
+    {
+      "fitness": 0.5982511895208087,
+      "params": {
+        "lambda": 0.00043878828256682336,
+        "spec": {
+          "diff_lag": 44,
+          "ema_fast": 51,
+          "ema_mid": 285,
+          "ema_slow": 1605,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": true,
+          "use_dslow": true,
+          "use_i1": true,
+          "use_imbalance": true,
+          "vol_norm": true,
+          "vol_span": 1359
+        },
+        "weight_power": 0.75
+      },
+      "seconds": 18.951055321
+    },
+    {
+      "fitness": 0.5079480141957924,
+      "params": {
+        "lambda": 0.2955009570675433,
+        "spec": {
+          "diff_lag": 22,
+          "ema_fast": 6,
+          "ema_mid": 218,
+          "ema_slow": 924,
+          "raw_prices": false,
+          "use_diff": false,
+          "use_dmid": false,
+          "use_dslow": true,
+          "use_i1": true,
+          "use_imbalance": true,
+          "vol_norm": true,
+          "vol_span": 423
+        },
+        "weight_power": 1.75
+      },
+      "seconds": 4.982645696
+    },
+    {
+      "fitness": 0.5729912900566794,
+      "params": {
+        "lambda": 0.00019039329836878808,
+        "spec": {
+          "diff_lag": 30,
+          "ema_fast": 38,
+          "ema_mid": 181,
+          "ema_slow": 1248,
+          "raw_prices": false,
+          "use_diff": true,
+          "use_dmid": false,
+          "use_dslow": false,
+          "use_i1": true,
+          "use_imbalance": false,
+          "vol_norm": false,
+          "vol_span": 1217
         },
         "weight_power": 1.0
       },
-      "seconds": 1.158980105
+      "seconds": 4.434021209
     },
     {
-      "fitness": 0.6177588170755668,
+      "fitness": 0.56501874298137,
       "params": {
-        "lambda": 0.011506619514250338,
+        "lambda": 0.00016401979550651846,
         "spec": {
-          "ema_fast": 57,
-          "ema_slow": 676,
-          "raw_prices": true,
-          "use_diff1": false,
+          "diff_lag": 3,
+          "ema_fast": 24,
+          "ema_mid": 86,
+          "ema_slow": 879,
+          "raw_prices": false,
+          "use_diff": true,
+          "use_dmid": false,
           "use_dslow": false,
-          "use_i1": false
+          "use_i1": true,
+          "use_imbalance": false,
+          "vol_norm": false,
+          "vol_span": 655
         },
         "weight_power": 1.0
       },
-      "seconds": 1.1692543149999999
+      "seconds": 4.377068648
     },
     {
-      "fitness": 0.6226881596770669,
+      "fitness": 0.5908192074937886,
       "params": {
-        "lambda": 0.001636072471008209,
+        "lambda": 0.00028200319334432397,
         "spec": {
-          "ema_fast": 56,
-          "ema_slow": 695,
+          "diff_lag": 18,
+          "ema_fast": 29,
+          "ema_mid": 197,
+          "ema_slow": 86,
           "raw_prices": true,
-          "use_diff1": true,
-          "use_dslow": false,
-          "use_i1": false
-        },
-        "weight_power": 1.0
-      },
-      "seconds": 1.978802216
-    },
-    {
-      "fitness": 0.6194460746073771,
-      "params": {
-        "lambda": 0.001636072471008209,
-        "spec": {
-          "ema_fast": 57,
-          "ema_slow": 725,
-          "raw_prices": true,
-          "use_diff1": false,
-          "use_dslow": false,
-          "use_i1": false
+          "use_diff": false,
+          "use_dmid": true,
+          "use_dslow": true,
+          "use_i1": false,
+          "use_imbalance": true,
+          "vol_norm": true,
+          "vol_span": 1643
         },
         "weight_power": 1.25
       },
-      "seconds": 1.138378714
+      "seconds": 3.648720511
+    },
+    {
+      "fitness": 0.590821896731532,
+      "params": {
+        "lambda": 0.1039735704358597,
+        "spec": {
+          "diff_lag": 43,
+          "ema_fast": 53,
+          "ema_mid": 22,
+          "ema_slow": 961,
+          "raw_prices": false,
+          "use_diff": false,
+          "use_dmid": false,
+          "use_dslow": true,
+          "use_i1": false,
+          "use_imbalance": false,
+          "vol_norm": false,
+          "vol_span": 946
+        },
+        "weight_power": 0.5
+      },
+      "seconds": 1.9461816619999999
+    },
+    {
+      "fitness": 0.5187532805704396,
+      "params": {
+        "lambda": 1.7097428401956527,
+        "spec": {
+          "diff_lag": 37,
+          "ema_fast": 51,
+          "ema_mid": 181,
+          "ema_slow": 736,
+          "raw_prices": false,
+          "use_diff": false,
+          "use_dmid": false,
+          "use_dslow": true,
+          "use_i1": false,
+          "use_imbalance": false,
+          "vol_norm": true,
+          "vol_span": 707
+        },
+        "weight_power": 0.5
+      },
+      "seconds": 2.016251854
+    },
+    {
+      "fitness": 0.6011308904337578,
+      "params": {
+        "lambda": 0.0003021582483841608,
+        "spec": {
+          "diff_lag": 40,
+          "ema_fast": 25,
+          "ema_mid": 233,
+          "ema_slow": 1922,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": true,
+          "use_dslow": false,
+          "use_i1": false,
+          "use_imbalance": true,
+          "vol_norm": true,
+          "vol_span": 803
+        },
+        "weight_power": 0.5
+      },
+      "seconds": 3.6338632090000003
+    },
+    {
+      "fitness": 0.5991623820740812,
+      "params": {
+        "lambda": 0.0003021582483841608,
+        "spec": {
+          "diff_lag": 40,
+          "ema_fast": 25,
+          "ema_mid": 233,
+          "ema_slow": 1963,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": true,
+          "use_dslow": false,
+          "use_i1": false,
+          "use_imbalance": true,
+          "vol_norm": true,
+          "vol_span": 1121
+        },
+        "weight_power": 0.5
+      },
+      "seconds": 3.679663347
+    },
+    {
+      "fitness": 0.5864213712210995,
+      "params": {
+        "lambda": 0.00043878828256682336,
+        "spec": {
+          "diff_lag": 44,
+          "ema_fast": 35,
+          "ema_mid": 276,
+          "ema_slow": 1605,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": true,
+          "use_dslow": true,
+          "use_i1": true,
+          "use_imbalance": true,
+          "vol_norm": false,
+          "vol_span": 1351
+        },
+        "weight_power": 0.0
+      },
+      "seconds": 23.881204975
+    },
+    {
+      "fitness": 0.596441349577438,
+      "params": {
+        "lambda": 0.00043878828256682336,
+        "spec": {
+          "diff_lag": 44,
+          "ema_fast": 51,
+          "ema_mid": 233,
+          "ema_slow": 1605,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": true,
+          "use_dslow": true,
+          "use_i1": false,
+          "use_imbalance": true,
+          "vol_norm": true,
+          "vol_span": 1359
+        },
+        "weight_power": 0.5
+      },
+      "seconds": 4.934526248
+    },
+    {
+      "fitness": 0.6231357820578153,
+      "params": {
+        "lambda": 0.00019039329836878808,
+        "spec": {
+          "diff_lag": 42,
+          "ema_fast": 35,
+          "ema_mid": 23,
+          "ema_slow": 1248,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": false,
+          "use_dslow": false,
+          "use_i1": true,
+          "use_imbalance": false,
+          "vol_norm": false,
+          "vol_span": 1217
+        },
+        "weight_power": 1.0
+      },
+      "seconds": 5.6880231519999995
+    },
+    {
+      "fitness": 0.6158914958873166,
+      "params": {
+        "lambda": 0.0010793775173651608,
+        "spec": {
+          "diff_lag": 42,
+          "ema_fast": 35,
+          "ema_mid": 205,
+          "ema_slow": 368,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": true,
+          "use_dslow": true,
+          "use_i1": false,
+          "use_imbalance": false,
+          "vol_norm": false,
+          "vol_span": 1140
+        },
+        "weight_power": 0.25
+      },
+      "seconds": 4.795862134
+    },
+    {
+      "fitness": 0.598073063933692,
+      "params": {
+        "lambda": 0.00044023998123779044,
+        "spec": {
+          "diff_lag": 44,
+          "ema_fast": 51,
+          "ema_mid": 233,
+          "ema_slow": 1569,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": true,
+          "use_dslow": false,
+          "use_i1": false,
+          "use_imbalance": true,
+          "vol_norm": true,
+          "vol_span": 1359
+        },
+        "weight_power": 0.75
+      },
+      "seconds": 3.6928331229999998
+    },
+    {
+      "fitness": 0.6046997145390198,
+      "params": {
+        "lambda": 0.00043878828256682336,
+        "spec": {
+          "diff_lag": 44,
+          "ema_fast": 25,
+          "ema_mid": 285,
+          "ema_slow": 1605,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": true,
+          "use_dslow": true,
+          "use_i1": false,
+          "use_imbalance": true,
+          "vol_norm": true,
+          "vol_span": 803
+        },
+        "weight_power": 0.75
+      },
+      "seconds": 4.963527615
+    },
+    {
+      "fitness": 0.5930847910151833,
+      "params": {
+        "lambda": 0.000705088055478153,
+        "spec": {
+          "diff_lag": 26,
+          "ema_fast": 51,
+          "ema_mid": 233,
+          "ema_slow": 1902,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": true,
+          "use_dslow": true,
+          "use_i1": false,
+          "use_imbalance": false,
+          "vol_norm": false,
+          "vol_span": 1915
+        },
+        "weight_power": 1.5
+      },
+      "seconds": 4.830151842
+    },
+    {
+      "fitness": 0.6022910182673358,
+      "params": {
+        "lambda": 0.42678074189821874,
+        "spec": {
+          "diff_lag": 42,
+          "ema_fast": 40,
+          "ema_mid": 8,
+          "ema_slow": 224,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": true,
+          "use_dslow": true,
+          "use_i1": true,
+          "use_imbalance": false,
+          "vol_norm": false,
+          "vol_span": 1351
+        },
+        "weight_power": 0.5
+      },
+      "seconds": 16.312943088
+    },
+    {
+      "fitness": 0.6025856935586442,
+      "params": {
+        "lambda": 0.0003021582483841608,
+        "spec": {
+          "diff_lag": 33,
+          "ema_fast": 25,
+          "ema_mid": 218,
+          "ema_slow": 1922,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": true,
+          "use_dslow": false,
+          "use_i1": false,
+          "use_imbalance": true,
+          "vol_norm": true,
+          "vol_span": 667
+        },
+        "weight_power": 0.5
+      },
+      "seconds": 3.670876201
+    },
+    {
+      "fitness": 0.5645331140880004,
+      "params": {
+        "lambda": 0.00028200319334432397,
+        "spec": {
+          "diff_lag": 18,
+          "ema_fast": 53,
+          "ema_mid": 22,
+          "ema_slow": 961,
+          "raw_prices": false,
+          "use_diff": false,
+          "use_dmid": false,
+          "use_dslow": true,
+          "use_i1": false,
+          "use_imbalance": false,
+          "vol_norm": true,
+          "vol_span": 1643
+        },
+        "weight_power": 1.25
+      },
+      "seconds": 2.034116687
+    },
+    {
+      "fitness": 0.6183645679723431,
+      "params": {
+        "lambda": 0.0010793775173651608,
+        "spec": {
+          "diff_lag": 42,
+          "ema_fast": 33,
+          "ema_mid": 65,
+          "ema_slow": 368,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": true,
+          "use_dslow": true,
+          "use_i1": false,
+          "use_imbalance": false,
+          "vol_norm": false,
+          "vol_span": 1351
+        },
+        "weight_power": 0.25
+      },
+      "seconds": 4.783766207
+    },
+    {
+      "fitness": 0.601920992636362,
+      "params": {
+        "lambda": 0.0003021582483841608,
+        "spec": {
+          "diff_lag": 33,
+          "ema_fast": 27,
+          "ema_mid": 248,
+          "ema_slow": 1922,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": true,
+          "use_dslow": false,
+          "use_i1": false,
+          "use_imbalance": true,
+          "vol_norm": true,
+          "vol_span": 667
+        },
+        "weight_power": 0.5
+      },
+      "seconds": 3.639682364
+    },
+    {
+      "fitness": 0.6230189134578039,
+      "params": {
+        "lambda": 0.00009747686128067388,
+        "spec": {
+          "diff_lag": 40,
+          "ema_fast": 25,
+          "ema_mid": 220,
+          "ema_slow": 1248,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": false,
+          "use_dslow": false,
+          "use_i1": true,
+          "use_imbalance": false,
+          "vol_norm": false,
+          "vol_span": 1217
+        },
+        "weight_power": 1.0
+      },
+      "seconds": 5.700752784
+    },
+    {
+      "fitness": 0.6203379319050584,
+      "params": {
+        "lambda": 0.0003021582483841608,
+        "spec": {
+          "diff_lag": 33,
+          "ema_fast": 25,
+          "ema_mid": 30,
+          "ema_slow": 1248,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": false,
+          "use_dslow": false,
+          "use_i1": true,
+          "use_imbalance": true,
+          "vol_norm": false,
+          "vol_span": 667
+        },
+        "weight_power": 0.5
+      },
+      "seconds": 6.375282556
+    },
+    {
+      "fitness": 0.600683497522077,
+      "params": {
+        "lambda": 0.0003021582483841608,
+        "spec": {
+          "diff_lag": 40,
+          "ema_fast": 25,
+          "ema_mid": 233,
+          "ema_slow": 1963,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": true,
+          "use_dslow": false,
+          "use_i1": false,
+          "use_imbalance": true,
+          "vol_norm": true,
+          "vol_span": 863
+        },
+        "weight_power": 0.5
+      },
+      "seconds": 3.643575814
+    },
+    {
+      "fitness": 0.6156300784303625,
+      "params": {
+        "lambda": 0.0010793775173651608,
+        "spec": {
+          "diff_lag": 40,
+          "ema_fast": 29,
+          "ema_mid": 205,
+          "ema_slow": 368,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": true,
+          "use_dslow": true,
+          "use_i1": false,
+          "use_imbalance": false,
+          "vol_norm": false,
+          "vol_span": 1140
+        },
+        "weight_power": 0.25
+      },
+      "seconds": 4.7852574820000005
+    },
+    {
+      "fitness": 0.6143063561689928,
+      "params": {
+        "lambda": 0.039703127185895026,
+        "spec": {
+          "diff_lag": 42,
+          "ema_fast": 27,
+          "ema_mid": 16,
+          "ema_slow": 368,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": true,
+          "use_dslow": true,
+          "use_i1": true,
+          "use_imbalance": false,
+          "vol_norm": false,
+          "vol_span": 1759
+        },
+        "weight_power": 0.25
+      },
+      "seconds": 15.906359165
+    },
+    {
+      "fitness": 0.619096093132333,
+      "params": {
+        "lambda": 0.0010793775173651608,
+        "spec": {
+          "diff_lag": 42,
+          "ema_fast": 35,
+          "ema_mid": 184,
+          "ema_slow": 474,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": true,
+          "use_dslow": true,
+          "use_i1": false,
+          "use_imbalance": false,
+          "vol_norm": false,
+          "vol_span": 1351
+        },
+        "weight_power": 0.5
+      },
+      "seconds": 4.77705798
+    },
+    {
+      "fitness": 0.6232820222136082,
+      "params": {
+        "lambda": 0.00019039329836878808,
+        "spec": {
+          "diff_lag": 42,
+          "ema_fast": 30,
+          "ema_mid": 35,
+          "ema_slow": 1248,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": false,
+          "use_dslow": false,
+          "use_i1": true,
+          "use_imbalance": false,
+          "vol_norm": false,
+          "vol_span": 1217
+        },
+        "weight_power": 1.0
+      },
+      "seconds": 5.702694314
+    },
+    {
+      "fitness": 0.5997825339080516,
+      "params": {
+        "lambda": 0.00043878828256682336,
+        "spec": {
+          "diff_lag": 50,
+          "ema_fast": 25,
+          "ema_mid": 19,
+          "ema_slow": 1248,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": false,
+          "use_dslow": true,
+          "use_i1": true,
+          "use_imbalance": true,
+          "vol_norm": false,
+          "vol_span": 803
+        },
+        "weight_power": 0.75
+      },
+      "seconds": 10.385366464
+    },
+    {
+      "fitness": 0.6162852946614608,
+      "params": {
+        "lambda": 0.0013458229070446239,
+        "spec": {
+          "diff_lag": 42,
+          "ema_fast": 35,
+          "ema_mid": 205,
+          "ema_slow": 368,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": true,
+          "use_dslow": true,
+          "use_i1": false,
+          "use_imbalance": false,
+          "vol_norm": false,
+          "vol_span": 1140
+        },
+        "weight_power": 0.25
+      },
+      "seconds": 5.160354116
+    },
+    {
+      "fitness": 0.6152864706258632,
+      "params": {
+        "lambda": 0.00019039329836878808,
+        "spec": {
+          "diff_lag": 42,
+          "ema_fast": 42,
+          "ema_mid": 24,
+          "ema_slow": 1248,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": true,
+          "use_dslow": false,
+          "use_i1": false,
+          "use_imbalance": false,
+          "vol_norm": false,
+          "vol_span": 1915
+        },
+        "weight_power": 1.5
+      },
+      "seconds": 3.593989043
+    },
+    {
+      "fitness": 0.6178502803217946,
+      "params": {
+        "lambda": 0.00019039329836878808,
+        "spec": {
+          "diff_lag": 44,
+          "ema_fast": 30,
+          "ema_mid": 215,
+          "ema_slow": 1248,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": true,
+          "use_dslow": false,
+          "use_i1": true,
+          "use_imbalance": false,
+          "vol_norm": false,
+          "vol_span": 1032
+        },
+        "weight_power": 1.0
+      },
+      "seconds": 9.461979276
+    },
+    {
+      "fitness": 0.6170092761172985,
+      "params": {
+        "lambda": 0.00019039329836878808,
+        "spec": {
+          "diff_lag": 42,
+          "ema_fast": 34,
+          "ema_mid": 65,
+          "ema_slow": 368,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": false,
+          "use_dslow": false,
+          "use_i1": true,
+          "use_imbalance": false,
+          "vol_norm": false,
+          "vol_span": 1217
+        },
+        "weight_power": 0.25
+      },
+      "seconds": 5.699123033
+    },
+    {
+      "fitness": 0.6218640547912193,
+      "params": {
+        "lambda": 0.0003021582483841608,
+        "spec": {
+          "diff_lag": 42,
+          "ema_fast": 25,
+          "ema_mid": 37,
+          "ema_slow": 1248,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": false,
+          "use_dslow": false,
+          "use_i1": true,
+          "use_imbalance": false,
+          "vol_norm": false,
+          "vol_span": 1253
+        },
+        "weight_power": 0.5
+      },
+      "seconds": 5.756399898
+    },
+    {
+      "fitness": 0.6001975536391232,
+      "params": {
+        "lambda": 0.0010793775173651608,
+        "spec": {
+          "diff_lag": 42,
+          "ema_fast": 35,
+          "ema_mid": 184,
+          "ema_slow": 1197,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": false,
+          "use_dslow": true,
+          "use_i1": true,
+          "use_imbalance": false,
+          "vol_norm": false,
+          "vol_span": 1351
+        },
+        "weight_power": 1.0
+      },
+      "seconds": 9.183826297
+    },
+    {
+      "fitness": 0.614371440728468,
+      "params": {
+        "lambda": 0.039703127185895026,
+        "spec": {
+          "diff_lag": 42,
+          "ema_fast": 27,
+          "ema_mid": 16,
+          "ema_slow": 363,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": true,
+          "use_dslow": true,
+          "use_i1": true,
+          "use_imbalance": false,
+          "vol_norm": false,
+          "vol_span": 1759
+        },
+        "weight_power": 0.25
+      },
+      "seconds": 15.947861527
+    },
+    {
+      "fitness": 0.6230116490883937,
+      "params": {
+        "lambda": 0.00019039329836878808,
+        "spec": {
+          "diff_lag": 45,
+          "ema_fast": 30,
+          "ema_mid": 38,
+          "ema_slow": 1248,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": false,
+          "use_dslow": false,
+          "use_i1": true,
+          "use_imbalance": false,
+          "vol_norm": false,
+          "vol_span": 1217
+        },
+        "weight_power": 1.0
+      },
+      "seconds": 5.732806817
+    },
+    {
+      "fitness": 0.6212125924717087,
+      "params": {
+        "lambda": 0.0003021582483841608,
+        "spec": {
+          "diff_lag": 22,
+          "ema_fast": 25,
+          "ema_mid": 23,
+          "ema_slow": 1248,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": false,
+          "use_dslow": false,
+          "use_i1": true,
+          "use_imbalance": false,
+          "vol_norm": false,
+          "vol_span": 667
+        },
+        "weight_power": 0.5
+      },
+      "seconds": 5.669672326
+    },
+    {
+      "fitness": 0.6240440054819915,
+      "params": {
+        "lambda": 0.00019039329836878808,
+        "spec": {
+          "diff_lag": 42,
+          "ema_fast": 30,
+          "ema_mid": 35,
+          "ema_slow": 1248,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": false,
+          "use_dslow": false,
+          "use_i1": true,
+          "use_imbalance": false,
+          "vol_norm": false,
+          "vol_span": 1217
+        },
+        "weight_power": 0.75
+      },
+      "seconds": 5.961281842
+    },
+    {
+      "fitness": 0.6162852946614608,
+      "params": {
+        "lambda": 0.0013458229070446239,
+        "spec": {
+          "diff_lag": 42,
+          "ema_fast": 35,
+          "ema_mid": 205,
+          "ema_slow": 368,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": true,
+          "use_dslow": true,
+          "use_i1": false,
+          "use_imbalance": false,
+          "vol_norm": false,
+          "vol_span": 1103
+        },
+        "weight_power": 0.25
+      },
+      "seconds": 4.84473765
+    },
+    {
+      "fitness": 0.6226363158042406,
+      "params": {
+        "lambda": 0.000020250446655717916,
+        "spec": {
+          "diff_lag": 40,
+          "ema_fast": 22,
+          "ema_mid": 35,
+          "ema_slow": 1248,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": false,
+          "use_dslow": false,
+          "use_i1": true,
+          "use_imbalance": false,
+          "vol_norm": false,
+          "vol_span": 1217
+        },
+        "weight_power": 1.0
+      },
+      "seconds": 5.866267664
+    },
+    {
+      "fitness": 0.6232519110244833,
+      "params": {
+        "lambda": 0.00019039329836878808,
+        "spec": {
+          "diff_lag": 42,
+          "ema_fast": 32,
+          "ema_mid": 35,
+          "ema_slow": 1248,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": false,
+          "use_dslow": false,
+          "use_i1": true,
+          "use_imbalance": false,
+          "vol_norm": false,
+          "vol_span": 1250
+        },
+        "weight_power": 1.0
+      },
+      "seconds": 5.745115791
+    },
+    {
+      "fitness": 0.623424032966648,
+      "params": {
+        "lambda": 0.00033845446458684975,
+        "spec": {
+          "diff_lag": 42,
+          "ema_fast": 30,
+          "ema_mid": 35,
+          "ema_slow": 1248,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": false,
+          "use_dslow": false,
+          "use_i1": true,
+          "use_imbalance": false,
+          "vol_norm": false,
+          "vol_span": 1217
+        },
+        "weight_power": 1.0
+      },
+      "seconds": 5.694078928
+    },
+    {
+      "fitness": 0.6240440054819915,
+      "params": {
+        "lambda": 0.00019039329836878808,
+        "spec": {
+          "diff_lag": 42,
+          "ema_fast": 30,
+          "ema_mid": 35,
+          "ema_slow": 1248,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": false,
+          "use_dslow": false,
+          "use_i1": true,
+          "use_imbalance": false,
+          "vol_norm": false,
+          "vol_span": 1236
+        },
+        "weight_power": 0.75
+      },
+      "seconds": 5.925079114
+    },
+    {
+      "fitness": 0.6221044021531537,
+      "params": {
+        "lambda": 0.00019039329836878808,
+        "spec": {
+          "diff_lag": 42,
+          "ema_fast": 30,
+          "ema_mid": 35,
+          "ema_slow": 1248,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": false,
+          "use_dslow": false,
+          "use_i1": true,
+          "use_imbalance": false,
+          "vol_norm": false,
+          "vol_span": 1190
+        },
+        "weight_power": 0.5
+      },
+      "seconds": 5.687147032
+    },
+    {
+      "fitness": 0.6231797236529019,
+      "params": {
+        "lambda": 0.00019039329836878808,
+        "spec": {
+          "diff_lag": 41,
+          "ema_fast": 30,
+          "ema_mid": 23,
+          "ema_slow": 1248,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": false,
+          "use_dslow": false,
+          "use_i1": true,
+          "use_imbalance": false,
+          "vol_norm": false,
+          "vol_span": 1217
+        },
+        "weight_power": 1.0
+      },
+      "seconds": 5.687278966
+    },
+    {
+      "fitness": 0.6230071323556897,
+      "params": {
+        "lambda": 0.00019039329836878808,
+        "spec": {
+          "diff_lag": 38,
+          "ema_fast": 31,
+          "ema_mid": 23,
+          "ema_slow": 1248,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": false,
+          "use_dslow": false,
+          "use_i1": true,
+          "use_imbalance": false,
+          "vol_norm": false,
+          "vol_span": 1217
+        },
+        "weight_power": 1.0
+      },
+      "seconds": 5.740772186
+    },
+    {
+      "fitness": 0.6221044021531537,
+      "params": {
+        "lambda": 0.00019039329836878808,
+        "spec": {
+          "diff_lag": 42,
+          "ema_fast": 30,
+          "ema_mid": 35,
+          "ema_slow": 1393,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": false,
+          "use_dslow": false,
+          "use_i1": true,
+          "use_imbalance": false,
+          "vol_norm": false,
+          "vol_span": 998
+        },
+        "weight_power": 0.5
+      },
+      "seconds": 5.86576069
+    },
+    {
+      "fitness": 0.6231890231175273,
+      "params": {
+        "lambda": 0.00019039329836878808,
+        "spec": {
+          "diff_lag": 40,
+          "ema_fast": 32,
+          "ema_mid": 220,
+          "ema_slow": 1248,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": false,
+          "use_dslow": false,
+          "use_i1": true,
+          "use_imbalance": false,
+          "vol_norm": false,
+          "vol_span": 1250
+        },
+        "weight_power": 1.0
+      },
+      "seconds": 5.743358549
+    },
+    {
+      "fitness": 0.622686955225777,
+      "params": {
+        "lambda": 0.00004679664186971235,
+        "spec": {
+          "diff_lag": 50,
+          "ema_fast": 30,
+          "ema_mid": 215,
+          "ema_slow": 1248,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": false,
+          "use_dslow": false,
+          "use_i1": true,
+          "use_imbalance": false,
+          "vol_norm": false,
+          "vol_span": 1217
+        },
+        "weight_power": 1.0
+      },
+      "seconds": 5.726075095
+    },
+    {
+      "fitness": 0.6230747504293844,
+      "params": {
+        "lambda": 0.00009747686128067388,
+        "spec": {
+          "diff_lag": 40,
+          "ema_fast": 26,
+          "ema_mid": 23,
+          "ema_slow": 1248,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": false,
+          "use_dslow": false,
+          "use_i1": true,
+          "use_imbalance": false,
+          "vol_norm": false,
+          "vol_span": 912
+        },
+        "weight_power": 1.0
+      },
+      "seconds": 5.618408145
+    },
+    {
+      "fitness": 0.6232414970720348,
+      "params": {
+        "lambda": 0.0003021582483841608,
+        "spec": {
+          "diff_lag": 40,
+          "ema_fast": 25,
+          "ema_mid": 207,
+          "ema_slow": 1248,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": false,
+          "use_dslow": false,
+          "use_i1": true,
+          "use_imbalance": false,
+          "vol_norm": false,
+          "vol_span": 1253
+        },
+        "weight_power": 1.0
+      },
+      "seconds": 5.702640715
+    },
+    {
+      "fitness": 0.6234592893599658,
+      "params": {
+        "lambda": 0.00019039329836878808,
+        "spec": {
+          "diff_lag": 47,
+          "ema_fast": 25,
+          "ema_mid": 220,
+          "ema_slow": 1248,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": false,
+          "use_dslow": false,
+          "use_i1": true,
+          "use_imbalance": false,
+          "vol_norm": false,
+          "vol_span": 1250
+        },
+        "weight_power": 0.75
+      },
+      "seconds": 6.412024151
+    },
+    {
+      "fitness": 0.6231823427739416,
+      "params": {
+        "lambda": 0.00023147931032617197,
+        "spec": {
+          "diff_lag": 42,
+          "ema_fast": 25,
+          "ema_mid": 70,
+          "ema_slow": 1315,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": false,
+          "use_dslow": false,
+          "use_i1": true,
+          "use_imbalance": false,
+          "vol_norm": false,
+          "vol_span": 1276
+        },
+        "weight_power": 1.0
+      },
+      "seconds": 5.623165238
+    },
+    {
+      "fitness": 0.6239857635811362,
+      "params": {
+        "lambda": 0.00019039329836878808,
+        "spec": {
+          "diff_lag": 42,
+          "ema_fast": 28,
+          "ema_mid": 35,
+          "ema_slow": 1248,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": false,
+          "use_dslow": false,
+          "use_i1": true,
+          "use_imbalance": false,
+          "vol_norm": false,
+          "vol_span": 1134
+        },
+        "weight_power": 0.75
+      },
+      "seconds": 5.689900414
+    },
+    {
+      "fitness": 0.6230377061050667,
+      "params": {
+        "lambda": 0.00012064597523749915,
+        "spec": {
+          "diff_lag": 47,
+          "ema_fast": 22,
+          "ema_mid": 220,
+          "ema_slow": 1248,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": false,
+          "use_dslow": false,
+          "use_i1": true,
+          "use_imbalance": false,
+          "vol_norm": false,
+          "vol_span": 1250
+        },
+        "weight_power": 0.75
+      },
+      "seconds": 6.120357858
+    },
+    {
+      "fitness": 0.6234592893599658,
+      "params": {
+        "lambda": 0.00019039329836878808,
+        "spec": {
+          "diff_lag": 47,
+          "ema_fast": 25,
+          "ema_mid": 219,
+          "ema_slow": 1248,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": false,
+          "use_dslow": false,
+          "use_i1": true,
+          "use_imbalance": false,
+          "vol_norm": false,
+          "vol_span": 1250
+        },
+        "weight_power": 0.75
+      },
+      "seconds": 5.762247416
+    },
+    {
+      "fitness": 0.6238506488884646,
+      "params": {
+        "lambda": 0.00008498049434900032,
+        "spec": {
+          "diff_lag": 37,
+          "ema_fast": 30,
+          "ema_mid": 220,
+          "ema_slow": 1248,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": false,
+          "use_dslow": false,
+          "use_i1": true,
+          "use_imbalance": false,
+          "vol_norm": false,
+          "vol_span": 1217
+        },
+        "weight_power": 0.75
+      },
+      "seconds": 5.822200494
+    },
+    {
+      "fitness": 0.6233595732082902,
+      "params": {
+        "lambda": 0.0003021582483841608,
+        "spec": {
+          "diff_lag": 42,
+          "ema_fast": 32,
+          "ema_mid": 35,
+          "ema_slow": 1248,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": false,
+          "use_dslow": false,
+          "use_i1": true,
+          "use_imbalance": false,
+          "vol_norm": false,
+          "vol_span": 1250
+        },
+        "weight_power": 1.0
+      },
+      "seconds": 6.883628022
+    },
+    {
+      "fitness": 0.6239708888483972,
+      "params": {
+        "lambda": 0.00019039329836878808,
+        "spec": {
+          "diff_lag": 40,
+          "ema_fast": 30,
+          "ema_mid": 35,
+          "ema_slow": 1248,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": false,
+          "use_dslow": false,
+          "use_i1": true,
+          "use_imbalance": false,
+          "vol_norm": false,
+          "vol_span": 1236
+        },
+        "weight_power": 0.75
+      },
+      "seconds": 5.972202579
+    },
+    {
+      "fitness": 0.6231813051490478,
+      "params": {
+        "lambda": 0.00019039329836878808,
+        "spec": {
+          "diff_lag": 37,
+          "ema_fast": 30,
+          "ema_mid": 35,
+          "ema_slow": 1310,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": false,
+          "use_dslow": false,
+          "use_i1": true,
+          "use_imbalance": false,
+          "vol_norm": false,
+          "vol_span": 1217
+        },
+        "weight_power": 1.0
+      },
+      "seconds": 5.974972489
+    },
+    {
+      "fitness": 0.6241002644082858,
+      "params": {
+        "lambda": 0.0003021582483841608,
+        "spec": {
+          "diff_lag": 42,
+          "ema_fast": 28,
+          "ema_mid": 16,
+          "ema_slow": 1248,
+          "raw_prices": true,
+          "use_diff": true,
+          "use_dmid": false,
+          "use_dslow": false,
+          "use_i1": true,
+          "use_imbalance": false,
+          "vol_norm": false,
+          "vol_span": 1236
+        },
+        "weight_power": 0.75
+      },
+      "seconds": 6.030021111
     }
   ]
 }
