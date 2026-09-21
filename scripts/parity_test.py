@@ -43,7 +43,7 @@ def main():
     spec = importlib.util.spec_from_file_location("solution", solution / "solution.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
-    model = mod.PredictionModel()
+    model = mod.PredictionModel(blend=False)  # the Rust trainer knows only the linear part
 
     parquet = pq.ParquetFile(a.validation)
     worst = 0.0

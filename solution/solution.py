@@ -15,6 +15,10 @@ Per row `x` (112 features as float64):
 where A, B, C, D are (112, 2) matrices folded from the exported weights
 (zero rows for feature columns the champion does not use), so the whole
 per-row cost is four small mat-vecs and a handful of vector updates.
+Optionally (``blend.json`` present next to this file) the linear prediction
+is blended per target with the organisers' stateful GRU baseline
+(``baseline.onnx``, part of the public starter pack, trained only on the
+competition data): ``pred = (1 - w) * linear + w * gru``.
 Predictions are deterministic and identical across runs.
 """
 from __future__ import annotations
@@ -30,7 +34,38 @@ os.environ.setdefault("MKL_NUM_THREADS", "1")
 import numpy as np
 
 N_FEATURES = 112
-MODEL_PATH = Path(__file__).resolve().parent / "model.json"
+HERE = Path(__file__).resolve().parent
+MODEL_PATH = HERE / "model.json"
+BLEND_PATH = HERE / "blend.json"
+
+
+class GruBaseline:
+    """The organisers' stateful GRU (ONNX), one row per call, one CPU thread."""
+
+    def __init__(self, path: Path):
+        import onnxruntime as ort
+
+        options = ort.SessionOptions()
+        options.intra_op_num_threads = 1
+        options.inter_op_num_threads = 1
+        options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
+        options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+        options.use_per_session_threads = True
+        options.add_session_config_entry("session.intra_op.allow_spinning", "0")
+        options.add_session_config_entry("session.inter_op.allow_spinning", "0")
+        self.session = ort.InferenceSession(str(path), sess_options=options, providers=["CPUExecutionProvider"])
+        self.h0 = np.zeros((1, 1, 128), dtype=np.float32)
+        self.h1 = np.zeros((1, 1, 128), dtype=np.float32)
+        self._x = np.zeros((1, 1, N_FEATURES), dtype=np.float32)
+
+    def reset(self) -> None:
+        self.h0.fill(0.0)
+        self.h1.fill(0.0)
+
+    def step(self, state: np.ndarray) -> np.ndarray:
+        self._x[0, 0] = state
+        pred, self.h0, self.h1 = self.session.run(None, {"features": self._x, "hidden_0": self.h0, "hidden_1": self.h1})
+        return pred[0, 0]
 
 
 def _fold(model: dict) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -73,9 +108,18 @@ def _fold(model: dict) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, 
 
 
 class PredictionModel:
-    def __init__(self, model_path: str | os.PathLike | None = None):
+    def __init__(self, model_path: str | os.PathLike | None = None, blend: bool = True):
         with open(model_path or MODEL_PATH) as f:
             model = json.load(f)
+        self.gru = None
+        self.w_gru = np.zeros(2)
+        if blend and BLEND_PATH.exists():
+            with open(BLEND_PATH) as f:
+                cfg = json.load(f)
+            self.w_gru = np.asarray(cfg["weight_on_gru"], dtype=np.float64)
+            if np.any(self.w_gru > 0):
+                self.gru = GruBaseline(HERE / cfg.get("onnx", "baseline.onnx"))
+        self.w_lin = 1.0 - self.w_gru
         if model.get("format") != "neutrino-wunder-linear-v1":
             raise ValueError(f"unsupported model format {model.get('format')!r}")
         layout = model["layout"]
@@ -104,6 +148,8 @@ class PredictionModel:
             self.step = 0
         if self.step == 0:
             self._reset(x)
+            if self.gru is not None:
+                self.gru.reset()
         else:
             tmp = self._tmp
             np.subtract(x, self.ema_fast, out=tmp)
@@ -113,6 +159,7 @@ class PredictionModel:
             tmp *= self.alpha_slow
             self.ema_slow += tmp
         self.step += 1
+        gru_pred = self.gru.step(data_point.state) if self.gru is not None else None
 
         if not data_point.need_prediction:
             self.prev[:] = x
@@ -126,6 +173,8 @@ class PredictionModel:
             pred -= self.prev @ self.w_prev
         pred += self.bias
         self.prev[:] = x
+        if gru_pred is not None:
+            pred = self.w_lin * pred + self.w_gru * gru_pred
         out = pred.astype(np.float32)
         if not np.isfinite(out).all():
             out = np.zeros(2, dtype=np.float32)
