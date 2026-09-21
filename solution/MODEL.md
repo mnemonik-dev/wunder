@@ -1,0 +1,12 @@
+# Neutrino linear read-out (neutrino-wunder-linear-v1)
+
+* **Trainer:** `neutrino-wunder train` in the `neutrino` repository
+  (`crates/neutrino-wunder`). It uses the `evoforge` genetic algorithm through
+  `neutrino-optimizer::run_search` to pick the feature hyper-parameters
+  (EMA spans, feature groups, sample-weight power, ridge strength) directly on
+  the competition metric, and fits the linear weights in closed form
+  (weighted ridge regression) for every candidate.
+* **Inference:** `solution.py` + `model.json`. Pure NumPy, one thread,
+  deterministic. See the docstring in `solution.py` for the exact recurrence.
+* **Metrics:** stored in `model.json` under `metrics` (validation Global WP,
+  including the part of the validation set the GA never saw).

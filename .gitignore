@@ -1,0 +1,16 @@
+# data (33 GB starter pack; fetched by scripts/fetch_starterpack.py)
+datasets/*
+!datasets/.gitkeep
+starterpack/datasets/
+*.part
+*.sparse.parquet
+
+# environment / build
+.venv/
+__pycache__/
+*.pyc
+target/
+
+# submission artefacts
+submission.zip
+*.log

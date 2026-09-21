@@ -1,0 +1,37 @@
+# Local replica of the organisers' scoring image (from the submission guide),
+# used to check that a submission runs in the exact runtime it will be scored in.
+#
+#   docker build -f docker/Dockerfile.scorer -t wunder-scorer .
+#   docker run --rm --cpus=1 -m 16g \
+#       -v "$PWD/datasets:/data:ro" -v "$PWD/submission.zip:/app/submission.zip:ro" \
+#       wunder-scorer
+FROM python:3.11-slim-bookworm
+
+RUN apt-get update && apt-get full-upgrade -y
+RUN apt-get install -y curl libgomp1 p7zip-full build-essential && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt /tmp/requirements.txt
+RUN pip install --upgrade pip \
+ && python -m pip install --prefer-binary --extra-index-url https://download.pytorch.org/whl/cpu -r /tmp/requirements.txt \
+ && python -m pip check && pip cache purge
+
+# Keep heavy libs strictly offline at runtime
+ENV HF_HUB_DISABLE_TELEMETRY=1 \
+    TRANSFORMERS_OFFLINE=1 HF_DATASETS_OFFLINE=1 \
+    HF_HUB_OFFLINE=1 \
+    WANDB_DISABLED=1 MLFLOW_ENABLE_SYSTEM_METRICS_LOGGING=false \
+    HOME=/app \
+    XDG_CACHE_HOME=/app/.cache \
+    MPLCONFIGDIR=/app/.matplotlib \
+    TORCH_HOME=/app/.cache/torch \
+    HF_HOME=/app/.cache/huggingface \
+    TRANSFORMERS_CACHE=/app/.cache/huggingface/transformers \
+    HF_DATASETS_CACHE=/app/.cache/huggingface/datasets \
+    NUMBA_CACHE_DIR=/app/.cache/numba
+
+WORKDIR /app
+COPY starterpack/utils.py /app/starterpack/utils.py
+COPY scripts/check_submission.py /app/scripts/check_submission.py
+COPY scripts/score_solution.py /app/scripts/score_solution.py
+ENV SEQUENCES=20
+CMD ["sh", "-c", "python scripts/check_submission.py /app/submission.zip --validation /data/valid.parquet --sequences ${SEQUENCES}"]
