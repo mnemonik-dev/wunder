@@ -157,6 +157,38 @@ class MlpReadout:
         return h.astype(np.float64)
 
 
+class MlpOnnx:
+    """The same MLP as an ONNX graph (scripts/export_mlp_onnx.py), run by ONNX
+    Runtime with pre-bound buffers so the per-row work stays in one engine
+    next to the GRU (mixing ONNX Runtime and OpenBLAS per row measured ~25 us
+    slower than the sum of the parts)."""
+
+    def __init__(self, path: Path, keep: np.ndarray | None):
+        import onnxruntime as ort
+
+        options = ort.SessionOptions()
+        options.intra_op_num_threads = 1
+        options.inter_op_num_threads = 1
+        options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
+        options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+        options.use_per_session_threads = True
+        options.add_session_config_entry("session.intra_op.allow_spinning", "0")
+        options.add_session_config_entry("session.inter_op.allow_spinning", "0")
+        self.session = ort.InferenceSession(str(path), sess_options=options, providers=["CPUExecutionProvider"])
+        f_in = self.session.get_inputs()[0].shape[1]
+        self.keep = keep
+        self.x = np.zeros((1, f_in), dtype=np.float32)
+        self.pred = np.zeros((1, 2), dtype=np.float32)
+        self.binding = self.session.io_binding()
+        self.binding.bind_input("phi", "cpu", 0, np.float32, self.x.shape, self.x.ctypes.data)
+        self.binding.bind_output("prediction", "cpu", 0, np.float32, self.pred.shape, self.pred.ctypes.data)
+
+    def __call__(self, phi: np.ndarray) -> np.ndarray:
+        self.x[0] = phi if self.keep is None else phi[self.keep]
+        self.session.run_with_iobinding(self.binding)
+        return self.pred[0].astype(np.float64)
+
+
 class PredictionModel:
     def __init__(self, model_path: str | os.PathLike | None = None, blend: bool = True):
         with open(model_path or MODEL_PATH) as f:
@@ -179,7 +211,12 @@ class PredictionModel:
             if np.any(self.w_gru != 0):
                 self.gru = GruBaseline(HERE / cfg.get("onnx", "baseline.onnx"))
             if np.any(self.w_mlp != 0):
-                self.mlp = MlpReadout(HERE / cfg.get("mlp", "mlp.npz"))
+                mlp_file = cfg.get("mlp", "mlp.npz")
+                if mlp_file.endswith(".onnx"):
+                    keep = cfg.get("mlp_keep")
+                    self.mlp = MlpOnnx(HERE / mlp_file, None if keep is None else np.asarray(keep, dtype=np.intp))
+                else:
+                    self.mlp = MlpReadout(HERE / mlp_file)
         self.use_lin = bool(np.any(self.w_lin != 0))
         if model.get("format") != "neutrino-wunder-linear-v1":
             raise ValueError(f"unsupported model format {model.get('format')!r}")
@@ -204,6 +241,22 @@ class PredictionModel:
             self.imb_bid, self.imb_ask = pairs[:, 0], pairs[:, 1]
             self.imb_floor = self.floor[self.imb_bid]
         self.bias = np.asarray(model["bias"], dtype=np.float64)
+        # Only recurrent state that an active block reads is updated (exact:
+        # unused EMAs / volatility never influence the outputs).
+        self.track_mid = self.use_mid
+        self.track_slow = self.use_slow
+        self.track_vol = self.vol_norm
+        # phi layout for the MLP: contiguous slices into one buffer.
+        n_raw, n_dyn = len(self.raw_idx), len(self.dyn_idx)
+        self._phi_slices = []
+        k = 0
+        for name, n in [("raw", n_raw), ("fast", n_dyn)] + [(b, n_dyn) for b in ("mid", "slow", "diff") if b in self.w] + ([("imb", len(self.w["imb"]))] if "imb" in self.w else []):
+            self._phi_slices.append((name, slice(k, k + n)))
+            k += n
+        self._phi = np.zeros(k)
+        full = np.arange(N_FEATURES)
+        self._raw_take = None if np.array_equal(self.raw_idx, full) else self.raw_idx
+        self._dyn_take = None if np.array_equal(self.dyn_idx, full) else self.dyn_idx
 
         self.seq_ix = None
         self.step = 0
@@ -236,18 +289,21 @@ class PredictionModel:
             np.subtract(x, self.ema_fast, out=tmp)
             tmp *= self.alpha_fast
             self.ema_fast += tmp
-            np.subtract(x, self.ema_mid, out=tmp)
-            tmp *= self.alpha_mid
-            self.ema_mid += tmp
-            np.subtract(x, self.ema_slow, out=tmp)
-            tmp *= self.alpha_slow
-            self.ema_slow += tmp
+            if self.track_mid:
+                np.subtract(x, self.ema_mid, out=tmp)
+                tmp *= self.alpha_mid
+                self.ema_mid += tmp
+            if self.track_slow:
+                np.subtract(x, self.ema_slow, out=tmp)
+                tmp *= self.alpha_slow
+                self.ema_slow += tmp
         d = self._d
         np.subtract(x, self.ema_fast, out=d)
-        np.abs(d, out=tmp)
-        tmp -= self.vol
-        tmp *= self.alpha_vol
-        self.vol += tmp
+        if self.track_vol:
+            np.abs(d, out=tmp)
+            tmp -= self.vol
+            tmp *= self.alpha_vol
+            self.vol += tmp
         slot = self.step % self.lag
         self.step += 1
         gru_pred = self.gru.step(data_point.state) if self.gru is not None else None
@@ -288,7 +344,14 @@ class PredictionModel:
                 lin += b @ self.w[name]
             pred += self.w_lin * lin
         if self.mlp is not None:
-            phi = np.concatenate([b[self.raw_idx] if n == "raw" else (b if n == "imb" else b[self.dyn_idx]) for n, b in blocks])
+            phi = self._phi
+            for (name, sl), (_, b) in zip(self._phi_slices, blocks):
+                if name == "raw":
+                    phi[sl] = b if self._raw_take is None else b[self._raw_take]
+                elif name == "imb":
+                    phi[sl] = b
+                else:
+                    phi[sl] = b if self._dyn_take is None else b[self._dyn_take]
             pred += self.w_mlp * self.mlp(phi)
         if gru_pred is not None:
             pred += self.w_gru * gru_pred

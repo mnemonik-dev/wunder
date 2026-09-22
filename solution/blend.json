@@ -1,23 +1,23 @@
 {
   "weights": {
-    "linear": [
-      0.10383235510805969,
-      0.06145699259778981
-    ],
     "mlp": [
-      0.6623390782184063,
-      0.6909149024152997
+      0.775,
+      0.75
     ],
     "gru": [
-      0.23382856667353408,
-      0.24762810498691037
+      0.225,
+      0.25
+    ],
+    "linear": [
+      0.0,
+      0.0
     ]
   },
   "onnx": "baseline.onnx",
-  "mlp": "mlp.npz",
+  "mlp": "mlp.onnx",
   "note": "pred = sum_m weights[m] * pred_m per target; weights chosen on the first half of valid.parquet sequences (scripts/blend.py)",
   "validation": {
-    "full_wp": 0.6729184296512569,
-    "eval_half_wp": 0.6735558327745964
+    "full_wp": 0.6732037292350097,
+    "eval_half_wp": 0.6740045828588361
   }
 }

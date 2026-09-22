@@ -126,9 +126,23 @@ Rows inside one sequence are highly redundant, so *sequence diversity*
 (1,000 sequences at stride 8) mattered far more than row count (400 at
 stride 2), and raw price levels help rather than enable memorisation.
 
-Inference cost of the MLP path in `solution.py` (feature blocks + network,
-float32, one thread): 30 µs/row for 256/64, 40 µs/row for 512/128. Float64
-was 95 µs/row for 512/128: the first weight matrix no longer fits the cache.
+Smaller networks trained with the same recipe were just as good on the
+selection rows (128/32: 0.6197, 96/32: 0.6207), so the 96/32 one ships. On
+the full validation set the MLP alone scores 0.6497 (linear read-out 0.6331).
+
+**Timing investigation.** Running the MLP in NumPy (OpenBLAS) next to the
+GRU in ONNX Runtime cost 68–100 µs/row, far more than the sum of the parts;
+allocator settings, call order, ORT memory options and MLP precision changed
+nothing. What worked: (1) exporting the MLP to ONNX and running it in a
+second ONNX Runtime session with pre-bound buffers (MLP 15 → 10 µs), (2)
+dropping the linear read-out from the blend (its weight is ≈ 0 once the MLP
+is present), (3) skipping the recurrent state no active block reads (mid /
+slow EMAs, volatility) and assembling `phi` in a preallocated buffer. Result:
+50–55 µs/row for MLP + GRU, 33–36 min projected. Float64 MLP weights were
+95 µs/row on their own for 512/128 (first weight matrix outside the cache).
+`scripts/blend.py` can verify a live score exactly: the 50-sequence live
+score of the shipped blend (0.720173) equals the value recomputed from the
+prediction caches.
 
 ## Where to go during the hackathon
 

@@ -32,8 +32,9 @@ guide, rules, FAQ, prizes) and [starterpack/METRIC.md](starterpack/METRIC.md).
 | `scripts/package_submission.sh` | `solution/` → `submission.zip` + pre-flight |
 | `scripts/train_neutrino.sh` | build `neutrino-wunder`, train `solution/model.json`, parity test, quick score |
 | `scripts/parity_test.py` | Rust trainer predictions == Python `solution.py` predictions |
-| `scripts/predict_valid.py`, `scripts/blend.py` | cache validation predictions; evaluate blends of two models offline |
-| `solution/` | the submission: `solution.py`, `model.json`, `blend.json`, `baseline.onnx`, `MODEL.md` |
+| `scripts/predict_valid.py`, `scripts/blend.py` | cache validation predictions; evaluate blends of N models offline |
+| `scripts/train_mlp.py`, `scripts/export_mlp_onnx.py` | train the MLP read-out on `neutrino-wunder features` exports; export it to ONNX |
+| `solution/` | the submission: `solution.py`, `model.json` (feature layout), `mlp.onnx`, `baseline.onnx`, `blend.json`, `MODEL.md` |
 | `starterpack/` | organisers' docs, `utils.py` (scorer), `baseline/` (stateful GRU, ONNX) |
 | `datasets/` | git-ignored Parquet data |
 | `docker/Dockerfile.scorer` | replica of the scoring image from the submission guide |
@@ -97,29 +98,32 @@ organisers' scorer). See `solution/train_report.json` for every GA trial and
 |---|---:|---:|---:|
 | Organisers' GRU baseline (ONNX), reproduced locally | 0.6171 (0.588 / 0.646) | 40 | 26 min |
 | Neutrino linear read-out, step 1 schema (8 genes, 120 features) | 0.6161 (0.612 / 0.620) | 11 | 7 min |
-| Neutrino linear read-out, step 2 schema (14 genes, 336 features, `model.json`) | 0.6331 (0.630 / 0.636) | 18 | 12 min |
+| Neutrino linear read-out, step 2 schema (14 genes, 336 features) | 0.6331 (0.630 / 0.636) | 18 | 12 min |
+| Neutrino MLP read-out (96/32) on the step-2 features, step 3 | 0.6497 (0.644 / 0.656) | 25 | 16 min |
 | Blend step-1 linear + GRU | 0.6641 (0.657 / 0.671) | 41 | 27 min |
-| **Shipped: blend step-2 linear + GRU** (`solution/`) | **0.6663** (0.661 / 0.672) | 48 | 31 min |
+| Blend step-2 linear + GRU | 0.6663 (0.661 / 0.672) | 48 | 31 min |
+| **Shipped: blend step-3 MLP + GRU** (`solution/`) | **0.6732** (0.668 / 0.679) | 50–55 | 33–36 min |
 
-The two models are complementary (the linear read-out wins on `t0`, the GRU
-on `t1`). Blend weights (0.275 / 0.325 on the GRU per target) were chosen on
-the first half of the validation sequences; on the untouched second half the
-blend scores 0.6680 (step 1: 0.6649), so the gain is not an artefact of the
-selection.
+Blend weights (0.225 / 0.250 on the GRU per target) were chosen on the first
+half of the validation sequences; on the untouched second half the shipped
+blend scores 0.6740 (step 2: 0.6680, step 1: 0.6649). Adding the linear
+read-out as a third member of the blend changes nothing once the MLP is in
+(weights ≈ 0), so it is dropped from the shipped blend; `model.json` still
+defines the feature layout the MLP consumes.
 
-GA run behind `model.json` (step 2): population 14 × 6 generations, seed 42,
-80 training / 60 hold-out sequences per candidate (1–9 s each), champion
-refit on 1,000 sequences (19.9 M rows, 336 features) in 129 s. Champion:
-fast EMA span 28, raw prices on, both instruments, a 42-row lagged
-difference block, no mid/slow residuals, no volatility normalisation, no
-imbalance block, ridge λ = 3.0e-4, sample-weight power 0.75; 0.6329 on the
-1,813 validation sequences the GA never saw. Rust vs Python parity: max |Δ|
-= 0 over 39,802 predictions.
+`model.json` (step 2 GA champion): population 14 × 6 generations, seed 42,
+80 training / 60 hold-out sequences per candidate, refit on 1,000 sequences
+(19.9 M rows, 336 features). Champion: fast EMA span 28, raw prices on, both
+instruments, a 42-row lagged difference block, ridge λ = 3.0e-4, weight power
+0.75. Rust vs Python parity: max |Δ| = 0.
 
-Step-2 feature blocks available to the GA (see `docs/NEUTRINO_SOLUTION.md`):
-fast / mid / slow EMA residuals, lagged difference with searchable lag,
-volatility normalisation by a running EMA of |residual|, bid/ask volume
-imbalance per book level.
+`mlp.onnx` (step 3): 336 → 96 → 32 → 2 ReLU MLP trained with
+`scripts/train_mlp.py` on the champion's features of all 1,000 training
+sequences (every 8th row, 2.5 M rows), dropout 0.3, weight decay 1e-4, input
+noise 0.1, 14 epochs, seed 42, selected by WP on an 80-sequence validation
+export; exported to ONNX by `scripts/export_mlp_onnx.py` so that the per-row
+work stays in one engine next to the GRU (see the design notes for the
+timing investigation). Training record: `solution/mlp_train.json`.
 
 Offline experiments: `scripts/predict_valid.py` caches a solution's scored
 validation predictions (multi-process), `scripts/blend.py` evaluates blends
