@@ -1,0 +1,19 @@
+{
+  "weights": {
+    "mlp": [
+      0.775,
+      0.75
+    ],
+    "gru": [
+      0.225,
+      0.25
+    ]
+  },
+  "onnx": "baseline.onnx",
+  "mlp": "mlp.npz",
+  "note": "pred = sum_m weights[m] * pred_m per target; weights chosen on the first half of valid.parquet sequences (scripts/blend.py)",
+  "validation": {
+    "full_wp": 0.6733581424988165,
+    "eval_half_wp": 0.6742560358762659
+  }
+}

@@ -103,6 +103,7 @@ organisers' scorer). See `solution/train_report.json` for every GA trial and
 | Blend step-1 linear + GRU | 0.6641 (0.657 / 0.671) | 41 | 27 min |
 | Blend step-2 linear + GRU | 0.6663 (0.661 / 0.672) | 48 | 31 min |
 | **Shipped: blend step-3 MLP + GRU** (`solution/`) | **0.6732** (0.668 / 0.679) | 50–55 | 33–36 min |
+| Step 4 (not shipped): GA with 200/120-sequence slices, 12 gens → 560 features; linear / MLP / MLP + GRU | 0.6343 / 0.6529 / 0.6734 (honest half 0.6743) | 66 | 44 min |
 
 Blend weights (0.225 / 0.250 on the GRU per target) were chosen on the first
 half of the validation sequences; on the untouched second half the shipped
@@ -116,6 +117,13 @@ defines the feature layout the MLP consumes.
 (19.9 M rows, 336 features). Champion: fast EMA span 28, raw prices on, both
 instruments, a 42-row lagged difference block, ridge λ = 3.0e-4, weight power
 0.75. Rust vs Python parity: max |Δ| = 0.
+
+Step 4 re-ran the GA with 2.5× larger slices and twice the generations
+(`experiments/step4/`). It chose a richer schema (three EMA residual blocks,
+27-row lagged difference, 560 features) whose MLP + GRU blend scores 0.6734
+(honest half 0.6743): +0.0002 / +0.0003 over the shipped step-3 blend for
++12 µs/row. Noise-level gain against a real loss of time margin, so step 3
+stays shipped and step 4 is kept as a negative result.
 
 `mlp.onnx` (step 3): 336 → 96 → 32 → 2 ReLU MLP trained with
 `scripts/train_mlp.py` on the champion's features of all 1,000 training

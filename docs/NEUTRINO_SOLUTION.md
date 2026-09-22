@@ -144,6 +144,28 @@ slow EMAs, volatility) and assembling `phi` in a preallocated buffer. Result:
 score of the shipped blend (0.720173) equals the value recomputed from the
 prediction caches.
 
+## Larger GA search (step 4, negative result)
+
+Re-running the GA with 200 training / 120 hold-out sequences per candidate
+and 12 × 12 candidates (116 evaluated, ≈ 1 h) converged on a 560-feature
+schema (fast/mid/slow EMA residuals with spans 17/156/563, 27-row lagged
+difference, raw prices, both instruments). Compared with the step-2/3
+schema (336 features) on the full validation set:
+
+| read-out | step 2/3 schema | step 4 schema |
+|---|---:|---:|
+| linear (ridge) | 0.6331 | 0.6343 |
+| MLP 96/32 | 0.6497 | 0.6529 |
+| MLP + GRU blend, full / honest half | 0.6732 / 0.6740 | 0.6734 / 0.6743 |
+| µs/row of the blend | 50–55 | 66 |
+
+The MLP gains +0.003 from the extra blocks, but the GRU blend absorbs almost
+all of it, and the extra blocks cost 12 µs/row (three more EMA updates and
+block subtractions, a 560-wide first layer). Verdict: not shipped; artifacts
+in `experiments/step4/`. The GA's hold-out fitness (linear read-out) is now
+the weaker signal, so the next search should score candidates with the MLP
+or on a larger hold-out rather than with more generations.
+
 ## Where to go during the hackathon
 
 * **More data.** The GA slice is 80 sequences; the final refit uses the
