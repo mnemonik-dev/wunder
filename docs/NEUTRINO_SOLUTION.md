@@ -98,6 +98,38 @@ validation predictions, `scripts/blend.py` picks per-target weights on the
 first half of the sequences and reports the second half. `solution.py` reads
 `blend.json` and mixes the two per target.
 
+## Non-linear read-out on the GA-selected features (step 3)
+
+`neutrino-wunder features` exports the champion's raw feature vectors
+(`phi`, plus `t0`, `t1`, `scored`) as a flat float32 matrix, one row per
+required step, optionally every `stride`-th step. `scripts/train_mlp.py`
+standardises them with the champion's `mu`/`sigma`, clips the targets to the
+metric range and trains a ReLU MLP with the same `|clip(y)|^p`-weighted MSE
+the ridge read-out minimises; the checkpoint with the best Global WP on a
+validation export (80 sequences, offset 60, scored rows only) is saved as
+NumPy arrays and replayed in float32 by `MlpReadout` in `solution.py`.
+
+What the experiments showed (validation export; the linear read-out scores
+0.6066 on the same rows):
+
+| training rows | network | regularisation | best valid WP |
+|---|---|---|---:|
+| 400 seqs × every 2nd row (4.0 M) | 256/64 | none | 0.5917 (epoch 1, then collapses to 0.52) |
+| 400 seqs × every 2nd row (4.0 M) | 512/128 | dropout 0.1 | 0.5956 (epoch 1, then collapses) |
+| 1000 seqs × every 8th row (2.5 M) | 256/64 | none | 0.6160 |
+| 1000 seqs × every 8th row, raw price columns dropped | 256/64 | none | 0.6006 |
+| 1000 seqs × every 8th row, raw prices dropped | 256/64 | dropout 0.3, wd 1e-4, noise 0.1 | 0.6032 |
+| 1000 seqs × every 8th row | 256/64 | dropout 0.3, wd 1e-4, noise 0.1 | 0.6196 (14 epochs) |
+| 1000 seqs × every 8th row | 512/128 | dropout 0.3, wd 1e-4, noise 0.1 | 0.6203 (14 epochs) |
+
+Rows inside one sequence are highly redundant, so *sequence diversity*
+(1,000 sequences at stride 8) mattered far more than row count (400 at
+stride 2), and raw price levels help rather than enable memorisation.
+
+Inference cost of the MLP path in `solution.py` (feature blocks + network,
+float32, one thread): 30 µs/row for 256/64, 40 µs/row for 512/128. Float64
+was 95 µs/row for 512/128: the first weight matrix no longer fits the cache.
+
 ## Where to go during the hackathon
 
 * **More data.** The GA slice is 80 sequences; the final refit uses the
