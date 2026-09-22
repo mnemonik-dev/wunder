@@ -105,10 +105,13 @@ def main():
     x = np.array(tr[:n, :f], dtype=np.float32)  # copy: memmap is read-only
     x -= mu
     x /= sigma
-    x = np.ascontiguousarray(x[:, keep])
+    if len(keep) != f:  # a fancy-index take copies the whole matrix; skip it when nothing is dropped
+        x = np.ascontiguousarray(x[:, keep])
     y = np.clip(np.array(tr[:n, f:f + 2], dtype=np.float32), -2.0, 2.0)
     w = np.abs(y) ** a.weight_power if a.weight_power > 0 else np.ones_like(y)
-    xv = np.ascontiguousarray(((np.array(va[:, :f], dtype=np.float32) - mu) / sigma)[:, keep])
+    xv = (np.array(va[:, :f], dtype=np.float32) - mu) / sigma
+    if len(keep) != f:
+        xv = np.ascontiguousarray(xv[:, keep])
     yv = np.array(va[:, f:f + 2], dtype=np.float32)
     print(f"loaded in {time.perf_counter() - t0:.0f}s; validation rows {len(xv):,} (scored only)", flush=True)
 
