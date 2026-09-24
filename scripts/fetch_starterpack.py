@@ -23,10 +23,13 @@ Only the Python standard library is needed for ``small`` and ``valid``;
 from __future__ import annotations
 
 import argparse
+import http.client
 import io
 import os
 import struct
 import sys
+import time
+import urllib.error
 import urllib.request
 import zlib
 from collections import deque
@@ -67,9 +70,13 @@ def http_len(url: str) -> int:
 def http_range(url: str, start: int, end: int):
     """Open a streaming response for bytes [start, end] (inclusive)."""
     req = urllib.request.Request(url, headers={**HEADERS, "Range": f"bytes={start}-{end}"})
-    r = urllib.request.urlopen(req)
+    r = urllib.request.urlopen(req, timeout=60)
     if r.status != 206:
+        r.close()
         raise RuntimeError(f"server ignored Range header (HTTP {r.status})")
+    if not r.headers.get("Content-Range", "").startswith(f"bytes {start}-{end}/"):
+        r.close()
+        raise RuntimeError("server returned an unexpected byte range")
     return r
 
 
@@ -127,17 +134,29 @@ def iter_member(url: str, e: dict, log=lambda s: None):
     end = start + e["csize"] - 1
     dec = zlib.decompressobj(-15) if e["method"] == 8 else None
     done = 0
-    with http_range(url, start, end) as r:
-        while True:
-            buf = r.read(CHUNK)
-            if not buf:
-                break
-            done += len(buf)
-            out = dec.decompress(buf) if dec else buf
-            if out:
-                yield out
-            log(done)
+    failures = 0
+    while done < e["csize"]:
+        before = done
+        try:
+            with http_range(url, start + done, end) as r:
+                while done < e["csize"]:
+                    buf = r.read(min(CHUNK, e["csize"] - done))
+                    if not buf:
+                        raise OSError("archive response ended early")
+                    out = dec.decompress(buf) if dec else buf
+                    done += len(buf)
+                    if out:
+                        yield out
+                    log(done)
+        except (OSError, http.client.HTTPException, urllib.error.URLError) as exc:
+            failures = 1 if done > before else failures + 1
+            if failures > 5:
+                raise
+            print(f"\n  retrying at compressed byte {done}: {exc}", file=sys.stderr)
+            time.sleep(min(2 ** failures, 30))
     if dec:
+        if not dec.eof:
+            raise RuntimeError("incomplete compressed archive member")
         out = dec.flush()
         if out:
             yield out
@@ -168,7 +187,7 @@ def fetch_file(url: str, e: dict, dest: Path, name: str):
             f.write(out)
             crc = zlib.crc32(out, crc)
     sys.stderr.write("\n")
-    if crc & 0xFFFFFFFF != e["crc"]:
+    if tmp.stat().st_size != e["usize"] or crc & 0xFFFFFFFF != e["crc"]:
         tmp.unlink()
         raise RuntimeError(f"CRC mismatch for {name}")
     os.replace(tmp, dest)

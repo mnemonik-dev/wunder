@@ -68,7 +68,9 @@ class GruBaseline:
         self.session = ort.InferenceSession(str(path), sess_options=options, providers=["CPUExecutionProvider"])
         self.x = np.zeros((1, 1, N_FEATURES), dtype=np.float32)
         self.pred = np.zeros((1, 1, 2), dtype=np.float32)
-        self.h = [np.zeros((1, 1, 128), dtype=np.float32) for _ in range(4)]  # a0, a1, b0, b1
+        # Hidden width comes from the graph, so a wider GRU needs no code change.
+        hidden = next(i.shape[-1] for i in self.session.get_inputs() if i.name == "hidden_0")
+        self.h = [np.zeros((1, 1, hidden), dtype=np.float32) for _ in range(4)]  # a0, a1, b0, b1
         self.bindings = [self._bind(0, 2), self._bind(2, 0)]
         self.parity = 0
 
@@ -132,26 +134,45 @@ def _fold(model: dict) -> dict:
 
 
 class MlpReadout:
-    """Small ReLU MLP on the standardised feature vector (weights from train_mlp.py)."""
+    """Small ReLU MLP on the standardised feature vector (weights from train_mlp.py).
+
+    Runs in float32, which is what the model was trained in, and folds the
+    standardisation into the first layer:
+
+        ((phi - mu) * inv_sigma) @ W0 + b0  ==  phi @ (inv_sigma[:, None] * W0)
+                                               + (b0 - (mu * inv_sigma) @ W0)
+
+    so the per-row subtract and multiply disappear. ``keep`` is dropped when it
+    selects every column in order, which turns a full gather into a no-op.
+    """
 
     def __init__(self, path: Path):
         d = np.load(path)
-        self.mu = d["mu"].astype(np.float64)
-        self.inv_sigma = 1.0 / d["sigma"].astype(np.float64)
-        self.keep = d["keep"].astype(np.intp) if "keep" in d else None
+        mu = d["mu"].astype(np.float32)
+        inv_sigma = (1.0 / d["sigma"].astype(np.float32)).astype(np.float32)
+        keep = d["keep"].astype(np.intp) if "keep" in d else None
         n = int(d["n_layers"])
-        self.layers = [(d[f"W{i}"].astype(np.float64), d[f"b{i}"].astype(np.float64)) for i in range(n)]
+        layers = [(d[f"W{i}"].astype(np.float32), d[f"b{i}"].astype(np.float32)) for i in range(n)]
+        w0, b0 = layers[0]
+        layers[0] = (np.ascontiguousarray(inv_sigma[:, None] * w0),
+                     (b0 - (mu * inv_sigma) @ w0).astype(np.float32))
+        self.layers = [(np.ascontiguousarray(w), np.ascontiguousarray(b)) for w, b in layers]
+        self.keep = None if (keep is not None and len(keep) == len(mu)
+                             and np.array_equal(keep, np.arange(len(mu)))) else keep
+        self.bufs = [np.empty(w.shape[1], dtype=np.float32) for w, _ in self.layers]
 
     def __call__(self, phi: np.ndarray) -> np.ndarray:
         if self.keep is not None:
             phi = phi[self.keep]
-        h = (phi - self.mu) * self.inv_sigma
+        h = phi
         last = len(self.layers) - 1
         for i, (w, b) in enumerate(self.layers):
-            h = h @ w
-            h += b
+            out = self.bufs[i]
+            np.matmul(h, w, out=out)
+            out += b
             if i != last:
-                np.maximum(h, 0.0, out=h)
+                np.maximum(out, 0.0, out=out)
+            h = out
         return h
 
 
@@ -159,23 +180,31 @@ class PredictionModel:
     def __init__(self, model_path: str | os.PathLike | None = None, blend: bool = True):
         with open(model_path or MODEL_PATH) as f:
             model = json.load(f)
-        # Blend: pred = w_lin * linear + w_mlp * mlp + w_gru * gru (per target).
-        self.gru = None
+        # Blend: pred = w_lin * linear + w_mlp * mlp + sum_g w_g * gru_g (per target).
+        # Several GRUs may be mixed in: `gru_models` maps a weight name in
+        # `weights` to the ONNX file that produces it. Two independently
+        # trained GRUs disagree enough to be worth carrying both.
+        self.grus = []  # (GruBaseline, weight) pairs, stepped on every row
         self.mlp = None
-        self.w_lin, self.w_mlp, self.w_gru = np.ones(2), np.zeros(2), np.zeros(2)
+        self.w_lin, self.w_mlp = np.ones(2), np.zeros(2)
         if blend and BLEND_PATH.exists():
             with open(BLEND_PATH) as f:
                 cfg = json.load(f)
+            gru_weights = {}
             if "weights" in cfg:
                 wts = cfg["weights"]
                 self.w_lin = np.asarray(wts.get("linear", [0.0, 0.0]), dtype=np.float64)
                 self.w_mlp = np.asarray(wts.get("mlp", [0.0, 0.0]), dtype=np.float64)
-                self.w_gru = np.asarray(wts.get("gru", [0.0, 0.0]), dtype=np.float64)
+                models = cfg.get("gru_models") or {"gru": cfg.get("onnx", "baseline.onnx")}
+                gru_weights = {name: np.asarray(wts[name], dtype=np.float64)
+                               for name in models if name in wts}
             else:  # step-1 format
-                self.w_gru = np.asarray(cfg["weight_on_gru"], dtype=np.float64)
-                self.w_lin = 1.0 - self.w_gru
-            if np.any(self.w_gru != 0):
-                self.gru = GruBaseline(HERE / cfg.get("onnx", "baseline.onnx"))
+                w = np.asarray(cfg["weight_on_gru"], dtype=np.float64)
+                self.w_lin = 1.0 - w
+                models, gru_weights = {"gru": cfg.get("onnx", "baseline.onnx")}, {"gru": w}
+            for name, weight in gru_weights.items():
+                if np.any(weight != 0):
+                    self.grus.append((GruBaseline(HERE / models[name]), weight))
             if np.any(self.w_mlp != 0):
                 self.mlp = MlpReadout(HERE / cfg.get("mlp", "mlp.npz"))
         self.use_lin = bool(np.any(self.w_lin != 0))
@@ -190,7 +219,12 @@ class PredictionModel:
         self.floor = np.asarray(layout.get("floor", [0.0] * N_FEATURES), dtype=np.float64)
         self.vol_norm = bool(spec.get("vol_norm", False))
         self.lag = int(spec.get("diff_lag", 1)) if spec.get("use_diff", spec.get("use_diff1")) else 1
-        self.w = _fold(model)
+        self.w = {k: np.ascontiguousarray(v, dtype=np.float32) for k, v in _fold(model).items()}
+        self.alpha_fast = np.float32(self.alpha_fast)
+        self.alpha_mid = np.float32(self.alpha_mid)
+        self.alpha_slow = np.float32(self.alpha_slow)
+        self.alpha_vol = np.float32(self.alpha_vol)
+        self.floor = self.floor.astype(np.float32)
         self.raw_idx = np.asarray(layout["raw_idx"], dtype=np.intp)
         self.dyn_idx = np.asarray(layout["dyn_idx"], dtype=np.intp)
         self.use_mid = "mid" in self.w
@@ -202,16 +236,27 @@ class PredictionModel:
             self.imb_bid, self.imb_ask = pairs[:, 0], pairs[:, 1]
             self.imb_floor = self.floor[self.imb_bid]
         self.bias = np.asarray(model["bias"], dtype=np.float64)
+        self._bias32 = self.bias.astype(np.float32)
 
         self.seq_ix = None
         self.step = 0
-        self.ema_fast = np.zeros(N_FEATURES)
-        self.ema_mid = np.zeros(N_FEATURES)
-        self.ema_slow = np.zeros(N_FEATURES)
-        self.vol = np.zeros(N_FEATURES)
-        self.hist = np.zeros((self.lag, N_FEATURES))
-        self._tmp = np.zeros(N_FEATURES)
-        self._d = np.zeros(N_FEATURES)
+        # The whole streaming path is float32: it matches the dtype the MLP was
+        # trained in, halves the memory traffic of the per-row EMA updates, and
+        # lets phi be filled by a straight copy instead of a converting one.
+        self.ema_fast = np.zeros(N_FEATURES, dtype=np.float32)
+        self.ema_mid = np.zeros(N_FEATURES, dtype=np.float32)
+        self.ema_slow = np.zeros(N_FEATURES, dtype=np.float32)
+        self.vol = np.zeros(N_FEATURES, dtype=np.float32)
+        self.hist = np.zeros((self.lag, N_FEATURES), dtype=np.float32)
+        self._tmp = np.zeros(N_FEATURES, dtype=np.float32)
+        self._d = np.zeros(N_FEATURES, dtype=np.float32)
+        n_raw, n_dyn = len(self.raw_idx), len(self.dyn_idx)
+        self._ident = (np.array_equal(self.raw_idx, np.arange(N_FEATURES))
+                       and np.array_equal(self.dyn_idx, np.arange(N_FEATURES)))
+        n_phi = n_raw + n_dyn * (1 + self.use_mid + self.use_slow + self.use_diff)
+        if self.use_imb:
+            n_phi += len(self.imb_bid)
+        self._phi = np.zeros(n_phi, dtype=np.float32)
 
     def _reset(self, x: np.ndarray) -> None:
         self.ema_fast[:] = x
@@ -221,34 +266,38 @@ class PredictionModel:
         self.hist[:] = x
 
     def predict(self, data_point):
-        x = np.asarray(data_point.state, dtype=np.float64)
+        x = np.asarray(data_point.state, dtype=np.float32)
         if data_point.seq_ix != self.seq_ix:
             self.seq_ix = data_point.seq_ix
             self.step = 0
         tmp = self._tmp
         if self.step == 0:
             self._reset(x)
-            if self.gru is not None:
-                self.gru.reset()
+            for gru, _ in self.grus:
+                gru.reset()
         else:
             np.subtract(x, self.ema_fast, out=tmp)
             tmp *= self.alpha_fast
             self.ema_fast += tmp
-            np.subtract(x, self.ema_mid, out=tmp)
-            tmp *= self.alpha_mid
-            self.ema_mid += tmp
-            np.subtract(x, self.ema_slow, out=tmp)
-            tmp *= self.alpha_slow
-            self.ema_slow += tmp
+            if self.use_mid:
+                np.subtract(x, self.ema_mid, out=tmp)
+                tmp *= self.alpha_mid
+                self.ema_mid += tmp
+            if self.use_slow:
+                np.subtract(x, self.ema_slow, out=tmp)
+                tmp *= self.alpha_slow
+                self.ema_slow += tmp
         d = self._d
         np.subtract(x, self.ema_fast, out=d)
-        np.abs(d, out=tmp)
-        tmp -= self.vol
-        tmp *= self.alpha_vol
-        self.vol += tmp
+        if self.vol_norm:
+            np.abs(d, out=tmp)
+            tmp -= self.vol
+            tmp *= self.alpha_vol
+            self.vol += tmp
         slot = self.step % self.lag
         self.step += 1
-        gru_pred = self.gru.step(data_point.state) if self.gru is not None else None
+        # Every GRU must see every row, prediction required or not, to keep its state.
+        gru_preds = [gru.step(data_point.state) for gru, _ in self.grus]
 
         if not data_point.need_prediction:
             self.hist[slot] = x
@@ -281,15 +330,21 @@ class PredictionModel:
 
         pred = np.zeros(2)
         if self.use_lin:
-            lin = self.bias.copy()
+            lin = self._bias32.copy()
             for name, b in blocks:
                 lin += b @ self.w[name]
             pred += self.w_lin * lin
         if self.mlp is not None:
-            phi = np.concatenate([b[self.raw_idx] if n == "raw" else (b if n == "imb" else b[self.dyn_idx]) for n, b in blocks])
+            phi = self._phi
+            k = 0
+            for n, bl in blocks:
+                idx = self.raw_idx if n == "raw" else (None if n == "imb" else self.dyn_idx)
+                src = bl if (idx is None or self._ident) else bl[idx]
+                phi[k:k + len(src)] = src
+                k += len(src)
             pred += self.w_mlp * self.mlp(phi)
-        if gru_pred is not None:
-            pred += self.w_gru * gru_pred
+        for (_, weight), gp in zip(self.grus, gru_preds):
+            pred += weight * gp
         out = pred.astype(np.float32)
         if not np.isfinite(out).all():
             out = np.zeros(2, dtype=np.float32)

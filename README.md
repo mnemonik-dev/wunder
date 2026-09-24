@@ -77,6 +77,48 @@ Training knobs are environment variables of `scripts/train_neutrino.sh`
 `FINAL_TRAIN_SEQUENCES`, `SEED`, `EXTRA="--no-ga --ema-fast 8 ..."`).
 The trainer binary itself: `../neutrino/target/release/neutrino-wunder --help`.
 
+## Package a submission
+
+Run from this `wunder/` repository with the Python environment installed and
+`datasets/valid.parquet` downloaded:
+
+```bash
+# Package the current solution into a new dated ZIP under submissions/.
+scripts/package_submission.sh
+
+# Package an experiment with an explicit, unique iteration name.
+scripts/package_submission.sh datasets/experiments/full-refit-20260922/refit \
+  submissions/full-refit-v1.zip --validation datasets/valid.parquet
+
+# Equivalent Make target; use a fresh output name for each iteration.
+make package SOLUTION=solution SUBMISSION=submissions/champion-v2.zip
+```
+
+The shell entry point calls `scripts/package_submission.py`. It includes runtime
+assets (`.py`, `.json`, `.onnx`, `.npz`, `.npy`, `.bin`) with `solution.py` at the
+ZIP root; it excludes hidden files, bytecode caches and `train_report.json`.
+Keep the source directory limited to the intended inference files. For the
+current blend these are `solution.py`, `model.json`, `baseline.onnx`, and
+`blend.json`. MLP variants also need the weights referenced by their blend config.
+
+Before publishing the ZIP, the script runs the existing preflight checker on
+two validation sequences: construction, warm-up behavior, finite output shape,
+determinism, archive size and projected runtime. Use `--sequences 10` for a larger
+smoke check. A failed check leaves no final archive. Existing ZIPs and receipts
+are never overwritten; choose a new filename when repeating an iteration.
+
+Each ZIP has a `.zip.json` receipt containing its SHA-256, per-file hashes,
+model/blend metadata and preflight output. Upload **only the `.zip`**; retain the
+receipt and training report for comparisons. The receipt's embedded scores are
+copied metadata, so run the full validation comparison separately before choosing
+a model to submit. Confirm an experiment's training has finished before packaging
+it: experiment directories may initially contain copies of the earlier model.
+
+`make package` without overrides uses `submission.zip`. The direct shell command
+without arguments uses a unique dated filename. `submissions/` is Git-ignored;
+back up archives and receipts separately. Set `PYTHON=/path/to/python` if using
+an environment other than `.venv`.
+
 ## The Neutrino solution
 
 `crates/neutrino-wunder` in the neutrino repository. A causal streaming

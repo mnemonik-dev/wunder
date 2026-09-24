@@ -13,4 +13,6 @@ target/
 
 # submission artefacts
 submission.zip
+submission.zip.json
+submissions/
 *.log

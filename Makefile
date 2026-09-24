@@ -2,6 +2,8 @@
 PY ?= .venv/bin/python
 VALID ?= datasets/valid.parquet
 SEQ ?= 50
+SOLUTION ?= solution
+SUBMISSION ?= submission.zip
 
 .PHONY: help setup fetch-small fetch-valid fetch-train-subset fetch-train list-archive \
         score-baseline score score-full train parity package check docker-scorer test-rust clean
@@ -42,8 +44,8 @@ train: ## build neutrino-wunder and train solution/model.json (see scripts/train
 parity: ## Rust trainer vs Python solution.py predictions must agree
 	$(PY) scripts/parity_test.py --validation $(VALID)
 
-package: ## zip solution/ into submission.zip and run pre-flight checks
-	scripts/package_submission.sh solution submission.zip --validation $(VALID)
+package: ## package SOLUTION with preflight + receipt (choose a fresh SUBMISSION path)
+	PYTHON="$(PY)" scripts/package_submission.sh "$(SOLUTION)" "$(SUBMISSION)" --validation "$(VALID)"
 
 check: ## pre-flight checks on an existing submission.zip
 	$(PY) scripts/check_submission.py submission.zip --validation $(VALID)
