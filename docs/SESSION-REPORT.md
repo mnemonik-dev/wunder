@@ -17,12 +17,12 @@ start of the period. The leader finished at 0.6646, so the gap is ~0.014.
 | 5 | mlpbig | 0.67819 | 0.67858 | 0.6496 |
 
 Submissions 4 and 5 are the two failures worth remembering, and both were
-process errors rather than modelling ones - see section 8.
+process errors rather than modelling ones - see section 9.
 
 What the period did produce: a much better sequence model that could not be
 shipped profitably, a 12% faster inference path, tooling that removes two
 hard constraints, and a fairly complete map of what does not work on this
-problem. That map is the main deliverable and is section 5.
+problem. That map is the main deliverable and is section 6.
 
 ## 2. Where the score actually came from
 
@@ -212,7 +212,262 @@ foundation, taking the linear read-out from a hand-guessed configuration to
 0.6331 and finding a non-obvious combination - a 42-row lagged difference
 alongside a 28-row EMA - that nobody proposed by hand.
 
-## 5. Tooling built
+## 5. Iteration log: why each method, when
+
+The rest of this report says *what* was measured. This section says *why that
+method, at that moment* - the decision chain, with the machine-learning idea
+behind each step. Sources are in section 13.
+
+### Iteration 0 - baseline: GA-searched features + ridge, blended with the GRU
+
+**Situation.** The organisers ship a stateful GRU scoring 0.617. A competitor
+needs something better.
+
+**Decision.** Build a causal feature transform, fit a *linear* read-out on it,
+and let a genetic algorithm choose the transform's shape (section 4).
+
+**Why a linear read-out first.** Not because linear is expected to win, but
+because it has a closed-form solution. That makes one candidate cost seconds
+instead of minutes, which is the only reason a search over feature designs is
+affordable at all. The generic lesson: *pick the model class that makes your
+search loop cheap, then upgrade the read-out later.*
+
+> **Concept - ridge regression.** Least squares with an L2 penalty on the
+> coefficients, `(X'WX + lambda I)^-1 X'Wy`. The penalty is what allows more
+> features than the data can cleanly support: it trades a little bias for a
+> large drop in variance. Closed form means no learning rate, no epochs, no
+> seed sensitivity. See ESL ch. 3.
+
+**Result.** 0.6331 linear; blended with the organisers' GRU, 0.6663 -> public
+0.6423.
+
+### Iteration 1 - swap the read-out for an MLP
+
+**Situation.** The features were designed by the GA, but the read-out on top
+was linear.
+
+**Decision.** Keep the same 336 features, replace the ridge with a small MLP.
+
+**Why.** The feature transform is fixed and causal; the only thing the linear
+read-out cannot express is *interaction between features* and any nonlinear
+response. An MLP adds exactly that for a few microseconds per row. This is the
+cheapest possible upgrade because it reuses all the upstream work.
+
+**Result.** MLP alone 0.6556, three-way blend 0.6739 -> public 0.6482.
+
+### Iteration 2 - diagnose before optimising: learning curve and capacity sweep
+
+**Situation.** The obvious next moves were "ensemble a few MLP seeds" or "make
+the MLP bigger", with guessed gains of +0.001 to +0.005.
+
+**Decision.** Measure first. Train the same MLP at 414k / 829k / 1.66M / 3.3M
+rows, and separately at 103k / 238k / 608k parameters.
+
+**Why this specific pair of experiments.** They separate the two reasons a
+model underperforms. If performance climbs with more *data* but is flat in
+*parameters*, the model is data-limited and you should buy data. If the
+reverse, it is capacity-limited. Guessing which one you are in is the single
+most common way to waste a week.
+
+> **Concept - learning curves.** Plot validation score against training-set
+> size at fixed capacity, and against capacity at fixed data. The shapes tell
+> you which resource is binding. This is the oldest diagnostic in applied ML
+> and still the highest-value one. The modern large-scale version is the
+> scaling-law literature (Kaplan et al. 2020).
+
+**Result.** +0.0108 WP per 4x rows, no saturation; capacity flat from 103k to
+608k parameters and *negative* at the top. Unambiguously data-limited - and
+the earlier guess of "+0.002 to +0.005 for 2-3x rows" was off by about 4x.
+
+### Iteration 3 - remove the constraint the diagnosis exposed
+
+**Situation.** Data was the lever, but training data came from disk exports and
+there was not enough disk.
+
+**Decision.** Write a chunk-rotating trainer: export a chunk, train on it,
+delete it, regenerate the next.
+
+**Why.** The constraint was never information, it was storage. Recomputing is
+cheap (about 40 s per 3.3M rows) relative to a training pass, so trading
+compute for disk is obviously right once you notice the trade exists.
+
+> **Concept - out-of-core learning.** When the dataset does not fit in RAM or
+> on disk, stream it in shards and take gradient steps as it arrives. SGD does
+> not care whether it sees the data from memory or from a pipe, as long as the
+> shard order is shuffled between epochs.
+
+**Result.** 13.3M rows -> MLP 0.6678, blend 0.6774 -> public **0.6508**, still
+the best result of the whole project.
+
+### Iteration 4 - build our own sequence model
+
+**Situation.** Two observations pointed the same way. First, the organisers'
+GRU scores only 0.617 yet still earns 0.18 of the blend weight - so a sequence
+model contributes something the feature read-outs do not. Second, the MLP's
+data lever was capped by the export stride, while a recurrent model reading
+the Parquet file directly has no stride at all: 211M rows per epoch instead of
+13M.
+
+**Decision.** Train a GRU from scratch on the raw 112 columns.
+
+**Why a GRU specifically.** Inference is row-by-row with strict causality, so
+the model must carry O(1) state. That rules out attention over a window
+(cost grows with context) and favours a recurrent cell. The GRU also matched
+the organisers' ONNX signature exactly, making it a drop-in.
+
+> **Concept - truncated backpropagation through time.** A 20,000-step sequence
+> cannot be differentiated end-to-end. Process it in windows (512 rows here),
+> backpropagate within a window, then carry the hidden state forward
+> *detached* so the next window inherits the state but not the gradient. The
+> state is exact; only the gradient path is truncated.
+
+**Result.** 0.670 - better than the MLP, and +0.053 over the organisers' GRU
+with the identical 128x2 architecture. The entire difference was training data
+and a metric-aligned loss.
+
+### Iteration 5 - the blend refuses the better model
+
+**Situation.** Our GRU (0.670) was supposed to replace theirs (0.617).
+Substituting it made the blend *worse*: 0.67742 -> 0.67647. Keeping both was
+better than either.
+
+**Decision.** Stop and measure *why*, rather than tuning blend weights.
+
+**Why.** This is the moment the project's central question appeared. An
+ensemble does not gain from accuracy, it gains from *error decorrelation* - so
+a better-but-redundant model can be worth less than a worse-but-independent
+one.
+
+> **Concept - why ensembles work.** The squared error of an average decomposes
+> into average individual error minus average *disagreement* between members
+> (the ambiguity decomposition). If members agree, the second term vanishes and
+> averaging buys nothing. Diversity is not a nice-to-have; it is the entire
+> mechanism.
+
+**Result, eventually.** Every model we owned sat at 0.93-0.96 residual
+correlation with every other. There was no diversity to exploit. (The first
+attempt at this measurement was *wrong* - see section 9 - and briefly
+suggested the organisers' GRU was highly diverse at 0.37.)
+
+### Iteration 6 - is the ceiling in the features?
+
+**Situation.** If all read-outs agree, perhaps the 336 features are the limit.
+
+**Decision.** Build a feature lab that fits a weighted ridge over a candidate
+feature family in seconds, and ablate seven families.
+
+**Why a ridge as the screen.** It is the fastest thing that can answer "is
+there signal in these columns at all". A family that cannot help a linear
+model is unlikely to help a nonlinear one; the converse is not guaranteed, but
+it is a sound first filter for *cheap*.
+
+> **Concept - ablation.** Change one component, hold everything else fixed,
+> measure. The discipline that matters is comparing on *identical rows*, which
+> makes the paired difference far less noisy than either absolute score.
+
+**Result.** +0.002 total, all from restoring the mid and slow EMA blocks.
+Classical microstructure features (microprice, book imbalance, spread) turned
+out to be *structurally unrecoverable*: the columns are per-column affine
+transformed including sign flips, so cross-column arithmetic is meaningless.
+
+### Iteration 7 - a genuinely different inductive bias
+
+**Situation.** Linear, MLP and GRU all agreed. All three are smooth function
+approximators trained by gradient descent.
+
+**Decision.** Fit gradient-boosted trees.
+
+**Why.** Trees are the standard counter-example to neural networks on tabular
+data: axis-aligned splits, automatic interactions, no smoothness assumption,
+robust to uninformative features. If anything was going to disagree with the
+MLP, this was the best candidate - and it doubles as the recognised strong
+baseline for this data type.
+
+> **Concept - inductive bias.** Every learner has built-in assumptions about
+> what functions are plausible. MLPs prefer smooth functions; trees prefer
+> piecewise-constant ones; recurrent nets prefer temporally local structure.
+> Two models with different biases making the *same* errors is strong evidence
+> the errors come from the data, not the model. See Grinsztajn et al. (2022)
+> on why trees still win on much tabular data.
+
+**Result.** 0.655 alone, residual correlation 0.962 with the MLP. No
+disagreement.
+
+### Iteration 8 - attack the one property all models shared
+
+**Situation.** Four families now agreed. What did they have in common? Short
+memory: EMA spans of 28, a 42-row lag, 512-step BPTT - over 20,000-row
+sequences. And a span-1248 EMA *had* measurably helped the linear model.
+
+**Decision.** Build a diagonal state-space layer with learned per-dimension
+decay rates initialised across spans from 2 to 20,000 rows.
+
+**Why this architecture.** A GRU's recurrence is a matrix multiply on the
+state - O(N^2), which is why 128 state costs 21 us/row and 256 costs 53. A
+*diagonal* recurrence `h <- a*h + (1-a)*Bx` is elementwise - O(N) - so a
+1024-dimensional state costs 11 us/row. The cost asymmetry is what makes long,
+multi-scale memory affordable at all. Each dimension is literally an EMA with
+its own learned span: the hand-built feature, generalised and made learnable.
+
+> **Concept - state-space models.** A linear recurrence with a diagonal
+> transition, plus a nonlinear read-out. Because the transition is constant in
+> time, the recurrence is a convolution with an exponential kernel and can be
+> evaluated in parallel during training (by FFT here), while still running as
+> an O(1) recurrence at inference. This is the core trick behind S4 and Mamba.
+
+**Result.** Trained well, learned a median span of 406 rows with a tail to
+45,000 - and landed at 0.955 correlation with the MLP. Long memory was not the
+blind spot. Killed at the pre-declared gate after 40 minutes rather than the
+planned 6.5 hours.
+
+### Iteration 9 - stop changing the model, change the objective
+
+**Situation.** Five architectures had converged. What was left was *what we
+were optimising*, which every model shared.
+
+**Decision.** Test three mismatches between the training objective and the
+scoring rule: the weighting exponent, a correlation loss, and the row
+distribution.
+
+**Why each.** The metric is a `|y|`-weighted *correlation* over a non-uniform
+9-13% subset of rows. We trained a `|y|^0.75`-weighted *squared error* over
+100% of rows. Each difference is a candidate explanation for a systematic gap.
+
+> **Concept - loss/metric mismatch.** Squared error penalises scale error;
+> correlation is invariant to affine rescaling. A model can be badly
+> calibrated and perfectly correlated - the organisers' GRU predicts with 2.4x
+> the target's standard deviation and still scores 0.617.
+
+> **Concept - covariate shift and importance weighting.** When training and
+> evaluation draw inputs from different distributions but share the same
+> conditional `p(y|x)`, the standard correction is to weight each training row
+> by `p_eval(x)/p_train(x)`, estimated by training a classifier to tell the two
+> apart. It helps when the model is misspecified or the relationship varies;
+> it costs effective sample size always.
+
+**Result.** The mask *is* strongly structured - a classifier predicts
+`is_scored` from the features at AUC 0.867, while the targets predict it at
+only 0.674, so `|y|^p` weighting cannot possibly correct for it. But the
+correction did not help (-0.0004), because feature-target relationships are
+sign-stable across sequences: the function is the same on scored and unscored
+rows, so reweighting only shrinks the sample. Correlation loss -0.0025, joint
+target head -0.0011. Only `weight_power 1.00` helped, by +0.0007.
+
+### Iteration 10 - optimise the binding constraint
+
+**Situation.** A submission had timed out. Runtime, not accuracy, was now what
+limited which models could ship.
+
+**Decision.** Profile `solution.py` before touching it.
+
+**Why profile first.** The intuition was that the GRU dominated. It did not:
+the MLP path cost 24 us/row against roughly 10 us of actual matrix arithmetic,
+with the rest going to per-row allocation and three fancy-index operations
+that were copying arrays *to themselves*.
+
+**Result.** 49.4 -> 43.5 us/row, predictions identical to six decimals.
+
+## 6. Tooling built
 
 All committed in `29d7180` on branch `claude/magical-fermi-4vcs0z`
 (**local only - never pushed**).
@@ -223,14 +478,14 @@ All committed in `29d7180` on branch `claude/magical-fermi-4vcs0z`
 | `predict_gru.py` | caches scored validation predictions for blending, with `--align-to` as a hard guard against row mismatch |
 | `train_mlp_streaming.py` | trains over several feature exports with one resident at a time; also carries `--loss {mse,corr}` and `--head {plain,joint}` from the objective experiments |
 | `train_mlp_rotating.py` | regenerates each feature chunk on demand instead of storing it, so training size is no longer capped by disk |
-| `train_ssm.py` | diagonal multi-timescale state-space layer (see section 7.5) |
+| `train_ssm.py` | diagonal multi-timescale state-space layer (see section 8.5) |
 | `feature_lab.py` | screens a feature family against a weighted ridge in seconds instead of hours |
 | `diversity_report.py` | standalone WP plus residual correlation against existing models. **Its metric is confounded by prediction scale** - rescale to the target's weighted std before trusting it (this bug produced a wrong conclusion once; section 6). |
 
 `solution.py` was also optimised (section 4) and generalised to blend several
 GRUs and to read hidden width from the ONNX graph.
 
-## 6. Inference optimisation
+## 7. Inference optimisation
 
 Profiling found half the runtime budget going to overhead rather than
 arithmetic. `raw_idx`, `dyn_idx` and `keep` were all `arange`, so three fancy
@@ -250,11 +505,11 @@ them; and everything ran in float64 although the MLP was trained in float32.
 Predictions unchanged to six decimals (verified 0.688171 both ways on 200
 sequences). Projected runtime 32.5 -> 28.6 min.
 
-## 7. What does not work
+## 8. What does not work
 
 Every item below was measured, not assumed.
 
-### 7.1 The central result: five model families converge
+### 8.1 The central result: five model families converge
 
 | family | inductive bias | WP alone | residual corr. vs MLP |
 |---|---|---:|---:|
@@ -273,7 +528,7 @@ moved the blend +0.0036; a GRU beating the organisers' by +0.053 moved it
 It is **not** an information ceiling - the leader demonstrably extracted
 +0.014 more. Five families sharing a limitation is a better description.
 
-### 7.2 Model capacity
+### 8.2 Model capacity
 
 MLP width is flat or negative at every data scale tried:
 
@@ -286,7 +541,7 @@ MLP width is flat or negative at every data scale tried:
 GRU capacity is unaffordable rather than unhelpful: 128x2 costs 20.6 us/row,
 192x2 costs 33.8, 256x2 costs 53.0, against a ~50 us/row total budget.
 
-### 7.3 Data scaling
+### 8.3 Data scaling
 
 **+0.0108 WP per 4x rows when the rows are new sequences.** But only +0.0013
 for 2.6x rows obtained by halving the export stride - and that gain did not
@@ -294,7 +549,7 @@ survive to the public leaderboard. Within-sequence rows are heavily
 autocorrelated and add close to nothing. All 10,607 sequences were used, so
 this lever is exhausted.
 
-### 7.4 Feature engineering
+### 8.4 Feature engineering
 
 At 1,000 training sequences, scored on full validation:
 
@@ -317,7 +572,7 @@ its sibling bid prices; volumes go negative; best-ask reads below best-bid).
 Microprice, book imbalance and spread need a common scale that preprocessing
 destroyed. This is why `imbalance` scored worst of all families (-0.004).
 
-### 7.5 Architecture: the state-space attempt
+### 8.5 Architecture: the state-space attempt
 
 Designed specifically to break the shared blind spot of short memory. A
 diagonal recurrence `h_t = a*h_{t-1} + (1-a)*Bx_t` costs O(N) per row instead
@@ -330,7 +585,7 @@ tail to 45,000 - far beyond anything else in the family. And it still landed
 at **0.955** residual correlation with the MLP. Long memory was not the blind
 spot. Full detail in `SPEC-NEXT-MODEL.md`.
 
-### 7.6 Objective and weighting
+### 8.6 Objective and weighting
 
 | change | WP | vs baseline |
 |---|---:|---:|
@@ -345,7 +600,7 @@ spot. Full detail in `SPEC-NEXT-MODEL.md`.
 Only `weight-power 1.00` - the metric's own exponent - helps, by a quarter of
 what is detectable.
 
-### 7.7 Other dead ends
+### 8.7 Other dead ends
 
 - **Blend diversity cannot be manufactured.** Training the same GRU with an
   unweighted MSE loss produced 0.94 correlation with the MLP. Architecture,
@@ -356,7 +611,7 @@ what is detectable.
   feature-linear signal is fully extracted; residuals correlate with features
   only because the model explains little variance, not because signal remains.
 
-## 8. Two mistakes that each cost a submission
+## 9. Two mistakes that each cost a submission
 
 **Quoting the wrong number.** `scripts/blend.py` prints `blend full` and
 `blend eval half`; weights are fitted on the first half of validation, so only
@@ -376,7 +631,7 @@ by prediction scale and reported the organisers' GRU at 0.37 correlation when
 the true figure was 0.96. That produced a wrong strategic conclusion for
 several hours until the scale correction was added.
 
-## 9. What was learned about the data
+## 10. What was learned about the data
 
 - Columns are per-column affine transformed, including sign flips.
 - Price columns share a dominant factor (PC1 = 70%); volume columns do not
@@ -391,10 +646,10 @@ several hours until the scale correction was added.
 - **The scoring mask is strongly structured.** Only 9-13% of predicted rows
   are scored, they carry 19-26% larger target magnitudes, and a classifier
   predicts `is_scored` from the 112 raw features at **AUC 0.867** - while the
-  targets predict it at only 0.674. Correcting for it did not help (7.6), but
+  targets predict it at only 0.674. Correcting for it did not help (8.6), but
   the fact itself is the most surprising thing found.
 
-## 10. State of the repository
+## 11. State of the repository
 
 Committed in `29d7180`, **local only, not pushed.**
 
@@ -409,7 +664,7 @@ feature exports.
 rules above. `docs/SPEC-NEXT-MODEL.md` carries the state-space design and its
 rejection.
 
-## 11. If anyone returns to this
+## 12. If anyone returns to this
 
 The honest position is that no promising hypothesis remains. Five
 architectures, seven feature families, four training objectives, three data
@@ -431,3 +686,89 @@ Things never tried, in rough order of what I would attempt first:
 What I would not repeat: architecture search, classical microstructure
 features, blend-weight tuning, and anything justified by a gain below +0.003
 on the honest half.
+
+## 13. Concepts and sources
+
+Grouped by where they appear in section 5. Links are to the canonical
+reference where one exists; the rest are cited by name.
+
+### Fundamentals
+
+- **Ridge regression, bias-variance, learning curves, bagging, boosting** -
+  Hastie, Tibshirani & Friedman, *The Elements of Statistical Learning*,
+  free PDF at <https://hastie.su.domains/ElemStatLearn/>. Chapters 3 (linear
+  methods), 7 (model assessment) and 10 (boosting) cover most of what this
+  project used.
+- **Adam optimiser** - Kingma & Ba, 2014. <https://arxiv.org/abs/1412.6980>
+- **One-cycle learning-rate schedule** - Smith & Topin, *Super-Convergence*.
+  <https://arxiv.org/abs/1708.07120>. Explains the mid-training dip that
+  appeared in nearly every run here and recovers during annealing - which I
+  twice misread as overfitting.
+
+### Diagnosing what limits a model
+
+- **Scaling laws** - Kaplan et al., 2020. <https://arxiv.org/abs/2001.08361>.
+  The large-scale formalisation of the learning-curve diagnostic: performance
+  as a power law in data, parameters and compute, and how to tell which one
+  binds.
+- **Bootstrap confidence intervals** - Efron & Tibshirani, *An Introduction to
+  the Bootstrap*. Resampling *whole sequences* rather than rows is what makes
+  the interval honest when observations inside a sequence are correlated.
+
+### Sequence models
+
+- **Understanding LSTMs / GRUs** - Chris Olah's explainer remains the clearest
+  introduction. <https://colah.github.io/posts/2015-08-Understanding-LSTMs/>
+- **Structured state spaces (S4)** - Gu, Goel & Re, 2021.
+  <https://arxiv.org/abs/2111.00396>. The diagonal-recurrence idea in
+  iteration 8.
+- **The Annotated S4** - Sasha Rush's line-by-line implementation walkthrough.
+  <https://srush.github.io/annotated-s4/>. The practical companion to the
+  paper; closest thing to what `scripts/train_ssm.py` does.
+- **Mamba** - Gu & Dao, 2023. <https://arxiv.org/abs/2312.00752>. The
+  selective-state successor; input-dependent decay rates, which this project
+  did *not* try.
+
+### Tabular data and inductive bias
+
+- **Why do tree-based models still outperform deep learning on typical tabular
+  data?** - Grinsztajn, Oyallon & Varoquaux, 2022.
+  <https://arxiv.org/abs/2207.08815>. Directly motivates iteration 7, and
+  explains why a GBM was the strongest candidate for disagreeing with the MLP.
+
+### Ensembles and diversity
+
+- **Stacked generalization** - Wolpert, 1992. The origin of fitting a model on
+  the outputs of other models, which is what `scripts/blend.py` does.
+- **Ambiguity decomposition** - Krogh & Vedelsby, 1995. The result that an
+  ensemble's error equals average member error minus average disagreement;
+  the formal reason iteration 5 failed.
+- **Diversity creation methods: a survey and categorisation** - Brown et al.,
+  2005. Survey of the ways people try to manufacture diversity - most of which
+  were tried here without success.
+
+### Distribution shift
+
+- **Dataset Shift in Machine Learning** - Quinonero-Candela et al. (eds.), MIT
+  Press, 2009. The standard reference for covariate shift and importance
+  weighting, used in iteration 9.
+- **Classifier two-sample test** - training a classifier to distinguish two
+  distributions and reading its AUC as a measure of how different they are.
+  That is exactly the `is_scored` experiment: AUC 0.867 means the scoring mask
+  is far from random.
+
+### Things worth knowing that this project learned the hard way
+
+- **Paired comparison beats absolute measurement.** Absolute WP on a
+  60-sequence slice drifts +-0.034 from truth; the *difference* between two
+  models on the same rows is far more stable. Always compare on identical
+  rows.
+- **A held-out set used for many decisions stops being held out.** Blend
+  weights, checkpoint selection, feature specs and configuration choices were
+  all made against one validation file. The honest-half discipline in section 9
+  is the minimum defence; a genuinely untouched split is better.
+- **Profile before optimising.** The intuition about where runtime went was
+  wrong by a factor of two.
+- **Define the kill criterion before running the experiment.** The state-space
+  model in iteration 8 had a pre-declared diversity gate, which is why it cost
+  40 minutes instead of 6.5 hours.
