@@ -17,7 +17,7 @@ start of the period. The leader finished at 0.6646, so the gap is ~0.014.
 | 5 | mlpbig | 0.67819 | 0.67858 | 0.6496 |
 
 Submissions 4 and 5 are the two failures worth remembering, and both were
-process errors rather than modelling ones - see section 6.
+process errors rather than modelling ones - see section 8.
 
 What the period did produce: a much better sequence model that could not be
 shipped profitably, a 12% faster inference path, tooling that removes two
@@ -46,7 +46,173 @@ replacing it dropped the blend from 0.67742 to 0.67647. Blend value comes from
 decorrelation, not accuracy, and by that measure ours added nothing the MLP
 did not already have.
 
-## 3. Tooling built
+## 3. How the solution works
+
+Not one model: a causal feature transform written in Rust, three read-outs
+fitted on top of it, and a blend - replayed at inference by a NumPy script
+that processes one row at a time and resets state on every new sequence.
+
+**Stage 1, streaming causal features** (`neutrino-wunder`, Rust). Per row:
+three exponential moving averages, a running volatility estimate, and a ring
+buffer of past rows. Emits the raw 112 columns, their residual against a fast
+EMA, and their difference against a row `lag` steps back - 336 features.
+Optional blocks add mid/slow EMA residuals, volatility normalisation, and
+per-level book imbalance. Every value uses only the current and earlier rows
+of the same sequence.
+
+**Stage 2, weighted ridge read-out**, solved in closed form. Given a feature
+layout, the linear read-out is a `|clip(y)|^p`-weighted ridge regression
+solved from the Gram matrix by Cholesky - no gradient descent. One candidate
+costs two streaming passes plus an O(F^3) solve, about 5 s for 80 sequences.
+That speed is what makes the genetic search in section 4 affordable.
+
+**Stage 3, nonlinear and recurrent read-outs** (PyTorch). An MLP on the same
+336 features, and a stateful GRU reading the raw 112 columns with truncated
+backpropagation through time over 512-row windows. The MLP ships as NumPy
+arrays, the GRU as ONNX with the organisers' input signature, so inference
+needs no PyTorch.
+
+**Stage 4, per-target blend.** Weights chosen per target by weighted least
+squares of the clipped target on the model predictions, then refined on a
+local grid against the competition metric itself - fitted on the first half
+of the validation sequences and reported on the second.
+
+### Every method used, by stage
+
+Including techniques used only for analysis, and those tried and discarded.
+
+| stage | method | detail |
+|---|---|---|
+| Data | Parquet row-group streaming | one row group = one 20,000-row sequence |
+| Data | Causal EMA transform | three spans + running volatility EMA, seeded at row 0 |
+| Data | Ring-buffer lagged difference | `x - x[t-lag]`, searchable lag |
+| Data | Strided export | every n-th predicted row to a flat float32 matrix |
+| Data | Rotating chunk regeneration | export -> train -> delete; disk holds one chunk |
+| Search | **EvoForge genetic algorithm** | 14 typed genes, population 14 x 6 generations, mutation 0.25, seed 42 |
+| Search | Metric-as-fitness | Global WP of the fitted candidate, not a proxy loss |
+| Search | Candidate caching | identical decoded genomes evaluated once |
+| Search | Direct ablation at scale | replaced the GA once its holdout proved too noisy |
+| Fitting | **Weighted ridge regression** | closed form, Cholesky on the Gram matrix |
+| Fitting | **MLP** | Adam, OneCycle schedule, dropout, Gaussian input noise |
+| Fitting | **GRU**, stateful | truncated BPTT over 512 rows, state carried detached, gradient clipping |
+| Fitting | **Gradient-boosted trees** | histogram-based, 400 trees, 63 leaves, sample-weighted |
+| Fitting | **Diagonal state-space model** | recurrence evaluated by FFT convolution; decays in log space |
+| Fitting | Weighted MSE loss | `|clip(y)|^p`, p searched over 0.75 / 1.00 / 1.50 |
+| Fitting | Batch weighted-Pearson loss | metric-aligned; tested and rejected |
+| Fitting | Joint rotated target head | predict `(t0-t1)/2`, `(t0+t1)/2`; tested and rejected |
+| Fitting | Importance weighting | by `p(scored\|x)`; tested and rejected |
+| Blending | Weighted least-squares stacking | per target, on the model predictions |
+| Blending | Local grid refinement | optimises the competition metric around the WLS point |
+| Blending | Honest half/half split | weights fitted on half the sequences, reported on the other |
+| Analysis | Sequence-level bootstrap | 400-2,000 replicates for confidence intervals on a delta |
+| Analysis | Scale-corrected residual correlation | the diversity metric; calibrates scale before comparing |
+| Analysis | PCA of column groups | prices share one factor (70%), volumes do not (25%) |
+| Analysis | Target autocorrelation | established the 50-200 step forecast horizon |
+| Analysis | Lead-lag cross-correlation | `feature[t-k]` against `target[t]` |
+| Analysis | Oracle upper bounds | gives an idea its best case before building it |
+| Analysis | Partial-correlation / stacking test | is signal left in the features after the model? |
+| Analysis | Covariate-shift classifier | predicts `is_scored` from features; AUC 0.867 |
+| Analysis | Learning curves, capacity sweeps | rows and parameters varied independently |
+| Deployment | NumPy row-by-row inference | one row per call, state reset on sequence change |
+| Deployment | ONNX Runtime with I/O binding | two pre-bound bindings ping-pong the hidden state |
+| Deployment | Standardisation folded into layer 1 | removes a subtract and multiply per row |
+| Deployment | float32 path, preallocated buffers | matches the training dtype; no per-row allocation |
+| Deployment | Three-way parity testing | Rust vs Python, PyTorch vs ONNX, offline blend vs shipped script |
+| Deployment | Packaging preflight | determinism, finite output, archive size, projected runtime |
+
+## 4. The genetic search
+
+The project's original premise was to improve the organisers' baseline using
+genetic evolution. **EvoForge** is a domain-neutral evolutionary optimisation
+core in Rust; `neutrino-optimizer` wraps it with typed genes and drives it
+against the competition metric.
+
+The split is deliberate. What is differentiable is solved exactly - the ridge
+read-out has a closed form. What is *not* differentiable goes to the GA: how
+long the memory should be, whether the second instrument helps, whether raw
+price levels should be visible at all, how hard to weight large moves.
+
+| gene | type | range | meaning |
+|---|---|---|---|
+| `ema_fast` / `ema_mid` / `ema_slow` | int | 2-60 / 5-300 / 30-2000 | spans of three moving averages |
+| `use_dmid` / `use_dslow` / `use_diff` | bool | - | which residual blocks to include |
+| `diff_lag` | int | 1-50 | lag of the difference block |
+| `raw_prices` / `use_i1` | bool | - | show raw price levels; include instrument i1 |
+| `vol_norm` / `vol_span` | bool / int | 20-2000 | divide residuals by running volatility |
+| `use_imbalance` | bool | - | per-level volume imbalance block |
+| `log10_lambda` | float | -5 .. 1 | ridge strength |
+| `weight_power` | float | 0-2 | sample weight exponent on \|y\| |
+
+Fitness is the *competition metric itself* - Global Weighted Pearson of the
+fitted candidate on a held-out validation slice, not a proxy loss. Population
+14, six generations, mutation rate 0.25, seed 42: **68 trials in 440 s**, each
+candidate fitted on 80 sequences and scored on 60.
+
+| best fitness after | 10 trials | 20 | 40 | 68 |
+|---|---:|---:|---:|---:|
+| GA holdout WP | 0.60970 | 0.62314 | 0.62328 | 0.62410 |
+
+The champion refit on 1,000 sequences scored **0.63314** on full validation, a
+real gain over the organisers' 0.61705 baseline and the foundation everything
+else was built on. It chose a 28-row fast EMA, a 42-row lagged difference,
+both instruments, raw prices visible, ridge lambda = 3.0e-4, weight power
+0.75 - and switched *off* the mid EMA, the slow EMA, volatility normalisation
+and imbalance.
+
+### Auditing its decisions
+
+Late in the work those switched-off genes were re-tested directly, at 1,000
+training sequences and scored on the full validation set rather than a
+60-sequence slice:
+
+| gene | GA chose | measured at scale | verdict on the GA |
+|---|---|---:|---|
+| `vol_norm` | off | -0.028 | right |
+| `use_imbalance` | off | -0.004 | right |
+| `use_dmid` + `use_dslow` | off | **+0.002** | **wrong** |
+| `weight_power` | 0.75 | +0.0007 at 1.00 | near miss |
+
+**The search was sound; its measuring instrument was not.** Fitness came from
+a 60-sequence holdout, and a slice that size was later measured drifting
++-0.034 from full-validation truth - while the effects being selected between
+are worth +-0.003. The signal-to-noise ratio of the fitness function was
+roughly one to ten.
+
+The convergence trace shows it: the GA reached 0.62314 by trial 20 and spent
+its remaining 48 trials gaining +0.001, well inside its own noise. It had
+stopped optimising the objective and started fitting its holdout.
+
+The fix is not a better GA. It is to screen blocks directly at 1,000
+sequences, where a +0.002 effect is visible - about five minutes per spec,
+and no search at all.
+
+### Why it failed, precisely
+
+The GA spent its compute on **many cheap, noisy evaluations instead of fewer
+accurate ones**. Each candidate cost about 5 s - a ridge fit on 80 sequences,
+scored on 60 - which bought 68 candidates in 440 s. But a 60-sequence holdout
+drifts +-0.034 from truth, and the differences between candidates are worth
++-0.003.
+
+Selection pressure needs a signal to act on. Here it mostly acted on
+measurement noise, which is why `use_dmid`/`use_dslow` were switched off: their
+true value is +0.002, permanently invisible at that noise level.
+
+The trade was backwards. Scoring a candidate on 1,000 sequences costs ~3 min
+instead of 5 s. The same 440-second budget would buy only 2-3 candidates, far
+too few - but a 3-hour budget would buy ~60 candidates evaluated *below* the
+noise floor of the effects being chosen between. That is the version that
+would have worked.
+
+Evolution optimises whatever you actually measure. The machinery was sound;
+the measurement was the bug.
+
+Worth stating plainly: the genetic approach *did* deliver the project's
+foundation, taking the linear read-out from a hand-guessed configuration to
+0.6331 and finding a non-obvious combination - a 42-row lagged difference
+alongside a 28-row EMA - that nobody proposed by hand.
+
+## 5. Tooling built
 
 All committed in `29d7180` on branch `claude/magical-fermi-4vcs0z`
 (**local only - never pushed**).
@@ -57,14 +223,14 @@ All committed in `29d7180` on branch `claude/magical-fermi-4vcs0z`
 | `predict_gru.py` | caches scored validation predictions for blending, with `--align-to` as a hard guard against row mismatch |
 | `train_mlp_streaming.py` | trains over several feature exports with one resident at a time; also carries `--loss {mse,corr}` and `--head {plain,joint}` from the objective experiments |
 | `train_mlp_rotating.py` | regenerates each feature chunk on demand instead of storing it, so training size is no longer capped by disk |
-| `train_ssm.py` | diagonal multi-timescale state-space layer (see section 5.5) |
+| `train_ssm.py` | diagonal multi-timescale state-space layer (see section 7.5) |
 | `feature_lab.py` | screens a feature family against a weighted ridge in seconds instead of hours |
 | `diversity_report.py` | standalone WP plus residual correlation against existing models. **Its metric is confounded by prediction scale** - rescale to the target's weighted std before trusting it (this bug produced a wrong conclusion once; section 6). |
 
 `solution.py` was also optimised (section 4) and generalised to blend several
 GRUs and to read hidden width from the ONNX graph.
 
-## 4. Inference optimisation
+## 6. Inference optimisation
 
 Profiling found half the runtime budget going to overhead rather than
 arithmetic. `raw_idx`, `dyn_idx` and `keep` were all `arange`, so three fancy
@@ -84,11 +250,11 @@ them; and everything ran in float64 although the MLP was trained in float32.
 Predictions unchanged to six decimals (verified 0.688171 both ways on 200
 sequences). Projected runtime 32.5 -> 28.6 min.
 
-## 5. What does not work
+## 7. What does not work
 
 Every item below was measured, not assumed.
 
-### 5.1 The central result: five model families converge
+### 7.1 The central result: five model families converge
 
 | family | inductive bias | WP alone | residual corr. vs MLP |
 |---|---|---:|---:|
@@ -107,7 +273,7 @@ moved the blend +0.0036; a GRU beating the organisers' by +0.053 moved it
 It is **not** an information ceiling - the leader demonstrably extracted
 +0.014 more. Five families sharing a limitation is a better description.
 
-### 5.2 Model capacity
+### 7.2 Model capacity
 
 MLP width is flat or negative at every data scale tried:
 
@@ -120,7 +286,7 @@ MLP width is flat or negative at every data scale tried:
 GRU capacity is unaffordable rather than unhelpful: 128x2 costs 20.6 us/row,
 192x2 costs 33.8, 256x2 costs 53.0, against a ~50 us/row total budget.
 
-### 5.3 Data scaling
+### 7.3 Data scaling
 
 **+0.0108 WP per 4x rows when the rows are new sequences.** But only +0.0013
 for 2.6x rows obtained by halving the export stride - and that gain did not
@@ -128,7 +294,7 @@ survive to the public leaderboard. Within-sequence rows are heavily
 autocorrelated and add close to nothing. All 10,607 sequences were used, so
 this lever is exhausted.
 
-### 5.4 Feature engineering
+### 7.4 Feature engineering
 
 At 1,000 training sequences, scored on full validation:
 
@@ -151,7 +317,7 @@ its sibling bid prices; volumes go negative; best-ask reads below best-bid).
 Microprice, book imbalance and spread need a common scale that preprocessing
 destroyed. This is why `imbalance` scored worst of all families (-0.004).
 
-### 5.5 Architecture: the state-space attempt
+### 7.5 Architecture: the state-space attempt
 
 Designed specifically to break the shared blind spot of short memory. A
 diagonal recurrence `h_t = a*h_{t-1} + (1-a)*Bx_t` costs O(N) per row instead
@@ -164,7 +330,7 @@ tail to 45,000 - far beyond anything else in the family. And it still landed
 at **0.955** residual correlation with the MLP. Long memory was not the blind
 spot. Full detail in `SPEC-NEXT-MODEL.md`.
 
-### 5.6 Objective and weighting
+### 7.6 Objective and weighting
 
 | change | WP | vs baseline |
 |---|---:|---:|
@@ -179,7 +345,7 @@ spot. Full detail in `SPEC-NEXT-MODEL.md`.
 Only `weight-power 1.00` - the metric's own exponent - helps, by a quarter of
 what is detectable.
 
-### 5.7 Other dead ends
+### 7.7 Other dead ends
 
 - **Blend diversity cannot be manufactured.** Training the same GRU with an
   unweighted MSE loss produced 0.94 correlation with the MLP. Architecture,
@@ -190,7 +356,7 @@ what is detectable.
   feature-linear signal is fully extracted; residuals correlate with features
   only because the model explains little variance, not because signal remains.
 
-## 6. Two mistakes that each cost a submission
+## 8. Two mistakes that each cost a submission
 
 **Quoting the wrong number.** `scripts/blend.py` prints `blend full` and
 `blend eval half`; weights are fitted on the first half of validation, so only
@@ -210,7 +376,7 @@ by prediction scale and reported the organisers' GRU at 0.37 correlation when
 the true figure was 0.96. That produced a wrong strategic conclusion for
 several hours until the scale correction was added.
 
-## 7. What was learned about the data
+## 9. What was learned about the data
 
 - Columns are per-column affine transformed, including sign flips.
 - Price columns share a dominant factor (PC1 = 70%); volume columns do not
@@ -225,10 +391,10 @@ several hours until the scale correction was added.
 - **The scoring mask is strongly structured.** Only 9-13% of predicted rows
   are scored, they carry 19-26% larger target magnitudes, and a classifier
   predicts `is_scored` from the 112 raw features at **AUC 0.867** - while the
-  targets predict it at only 0.674. Correcting for it did not help (5.6), but
+  targets predict it at only 0.674. Correcting for it did not help (7.6), but
   the fact itself is the most surprising thing found.
 
-## 8. State of the repository
+## 10. State of the repository
 
 Committed in `29d7180`, **local only, not pushed.**
 
@@ -243,7 +409,7 @@ feature exports.
 rules above. `docs/SPEC-NEXT-MODEL.md` carries the state-space design and its
 rejection.
 
-## 9. If anyone returns to this
+## 11. If anyone returns to this
 
 The honest position is that no promising hypothesis remains. Five
 architectures, seven feature families, four training objectives, three data
